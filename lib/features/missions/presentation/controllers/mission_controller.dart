@@ -38,19 +38,28 @@ class MissionController extends ChangeNotifier {
   Future<void> toggleMission(int index) async {
     final mission = missions[index];
     final updatedMission = mission.copyWith(isCompleted: !mission.isCompleted);
-    missions[index] = updatedMission;
-    notifyListeners();
     
-    // Actualizar en el repositorio (para persistencia local)
-    await repository.updateMission(updatedMission);
-    
-    // Actualizar la sesión del día (agregar o remover de completadas)
-    if (daySessionController != null) {
-      if (updatedMission.isCompleted) {
-        await daySessionController!.addCompletedMission(updatedMission);
-      } else {
-        await daySessionController!.removeCompletedMission(updatedMission.id);
+    try {
+      // 1. Actualizar la sesión del día PRIMERO (puede fallar)
+      if (daySessionController != null) {
+        if (updatedMission.isCompleted) {
+          await daySessionController!.addCompletedMission(updatedMission);
+        } else {
+          await daySessionController!.removeCompletedMission(updatedMission.id);
+        }
       }
+      
+      // 2. Si todo salió bien, actualizar el repositorio
+      await repository.updateMission(updatedMission);
+      
+      // 3. Solo ahora actualizar la UI
+      missions[index] = updatedMission;
+      notifyListeners();
+      
+    } catch (e) {
+      print("Error al toggle misión: $e");
+      // La UI no se actualiza si algo falló
+      // TODO: Mostrar mensaje de error al usuario
     }
   }
 }

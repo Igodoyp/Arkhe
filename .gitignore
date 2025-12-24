@@ -43,3 +43,52 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Windows specific
+Thumbs.db
+desktop.ini
+*.lnk
+
+# macOS specific
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Firebase (si lo usas en el futuro)
+firebase_options.dart
+google-services.json
+GoogleService-Info.plist
+
+# Environment variables y secrets
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+secrets.json
+
+# Archivos de configuración local del desarrollador
+*.local.dart
+local_config.dart
+
+# Logs y debugging
+*.log
+*.stacktrace
+
+# Archivos temporales de Flutter
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Archivos de análisis
+analysis_options.yaml.bak
+
+# Base de datos local (cuando implementes persistencia real)
+*.db
+*.sqlite
+*.sqlite3
+*.realm
+
+# Archivos grandes de assets (si usas git-lfs)
+# *.mp4
+# *.mov
+# *.zip
