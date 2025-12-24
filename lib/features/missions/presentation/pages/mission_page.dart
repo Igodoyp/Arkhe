@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../controllers/mission_controller.dart';
 import '../../data/datasources/mission_datasource.dart';
 import '../../data/repositories/mission_repository_impl.dart';
-import 'stats_page.dart'; // Asegúrate de importar la página de stats
+import 'user_stats_page.dart'; // Asegúrate de importar la página de stats
 
 class MissionsPage extends StatefulWidget {
   const MissionsPage({super.key});
