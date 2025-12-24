@@ -1,6 +1,8 @@
 // data/datasources/stats_datasource.dart
 import '../../domain/entities/stat_type.dart';
 
+//TODO: implementar data base real
+
 // 1. La Interfaz del DataSource
 abstract class StatsRemoteDataSource {
   Future<Map<String, dynamic>> fetchUserStatsFromServer();

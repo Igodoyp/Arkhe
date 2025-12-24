@@ -6,6 +6,8 @@ import '../../data/datasources/user_stats_datasource.dart';
 import '../../data/repositories/user_stats_repository_impl.dart';
 import '../../domain/usecases/user_stats_usecase.dart';
 
+//TODO: añadir doble capa  en el rad chart con sombra representando los stats que tendria si terminara el dia hoy
+
 class StatsPage extends StatefulWidget {
   const StatsPage({super.key});
 

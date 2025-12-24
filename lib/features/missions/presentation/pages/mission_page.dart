@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
 import '../controllers/mission_controller.dart';
+import '../controllers/day_session_controller.dart';
 import '../../data/datasources/mission_datasource.dart';
+import '../../data/datasources/day_session_datasource.dart';
+import '../../data/datasources/user_stats_datasource.dart';
 import '../../data/repositories/mission_repository_impl.dart';
-import 'user_stats_page.dart'; // Asegúrate de importar la página de stats
+import '../../data/repositories/day_session_repository_impl.dart';
+import '../../data/repositories/user_stats_repository_impl.dart';
+import '../../domain/usecases/day_session_usecase.dart';
+import '../../domain/entities/stat_type.dart';
+import 'user_stats_page.dart';
 
 class MissionsPage extends StatefulWidget {
   const MissionsPage({super.key});
@@ -12,28 +19,85 @@ class MissionsPage extends StatefulWidget {
 }
 
 class _MissionsPageState extends State<MissionsPage> {
-  // En una app real, usarías Provider/Riverpod/GetIt para obtener esto
-  late MissionController _controller;
+  // Controllers
+  late MissionController _missionController;
+  late DaySessionController _daySessionController;
 
   @override
   void initState() {
     super.initState();
-    // Inyección de Dependencias Manual (para el ejemplo)
-    // 1. Instanciamos el DataSource Dummy
-    final dataSource = MissionGeminiDummyDataSourceImpl();
-    // 2. Inyectamos al Repo
-    final repository = MissionRepositoryImpl(remoteDataSource: dataSource);
-    // 3. Inyectamos al Controller
-    _controller = MissionController(repository: repository);
     
-    // Cargar datos
-    _controller.loadMissions();
+    // === Inyección de Dependencias Manual ===
     
-    // Escuchar cambios (simple setState para el ejemplo)
-    _controller.addListener(() {
+    // 1. DataSources
+    final missionDataSource = MissionGeminiDummyDataSourceImpl();
+    final daySessionDataSource = DaySessionDummyDataSourceImpl();
+    final userStatsDataSource = StatsDummyDataSourceImpl();
+    
+    // 2. Repositories
+    final missionRepository = MissionRepositoryImpl(remoteDataSource: missionDataSource);
+    final daySessionRepository = DaySessionRepositoryImpl(dataSource: daySessionDataSource);
+    final userStatsRepository = UserStatsRepositoryImpl(remoteDataSource: userStatsDataSource);
+    
+    // 3. Use Cases
+    final getCurrentDaySessionUseCase = GetCurrentDaySessionUseCase(daySessionRepository);
+    final addCompletedMissionUseCase = AddCompletedMissionUseCase(daySessionRepository);
+    final removeCompletedMissionUseCase = RemoveCompletedMissionUseCase(daySessionRepository);
+    final endDayUseCase = EndDayUseCase(
+      daySessionRepository: daySessionRepository,
+      userStatsRepository: userStatsRepository,
+    );
+    
+    // 4. Controllers
+    _daySessionController = DaySessionController(
+      getCurrentDaySessionUseCase: getCurrentDaySessionUseCase,
+      addCompletedMissionUseCase: addCompletedMissionUseCase,
+      removeCompletedMissionUseCase: removeCompletedMissionUseCase,
+      endDayUseCase: endDayUseCase,
+    );
+    
+    _missionController = MissionController(
+      repository: missionRepository,
+      daySessionController: _daySessionController,
+    );
+    
+    // 5. Cargar datos
+    _missionController.loadMissions();
+    _daySessionController.loadCurrentSession();
+    
+    // 6. Escuchar cambios
+    _missionController.addListener(() {
+      if (mounted) setState(() {});
+    });
+    _daySessionController.addListener(() {
       if (mounted) setState(() {});
     });
   }
+  
+  // Método para mostrar el diálogo de resumen del día
+  void _showEndDaySummary(BuildContext context) async {
+    final result = await _daySessionController.endDay();
+    
+    if (result == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No hay misiones completadas o el día ya fue finalizado'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _EndDaySummaryDialog(result: result),
+    );
+  }
+
+//TODO: meter cosas dopaminicas al completar misiones
 
   @override
   Widget build(BuildContext context) {
@@ -67,133 +131,438 @@ class _MissionsPageState extends State<MissionsPage> {
           ),
         ],
       ),
-      body: _controller.isLoading
+      body: _missionController.isLoading
           ? const Center(child: CircularProgressIndicator(color: Colors.redAccent))
-          : ListView.builder(
-              itemCount: _controller.missions.length,
-              itemBuilder: (context, index) {
-                final mission = _controller.missions[index];
-                return Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          : Column(
+              children: [
+                // Barra de información con contador y botón "Finalizar Día"
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  margin: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.5),
-                        blurRadius: 10,
-                        offset: const Offset(4, 8),
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.redAccent, width: 2),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'MISIONES COMPLETADAS',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${_daySessionController.completedMissionsCount} / ${_missionController.missions.length}',
+                            style: const TextStyle(
+                              color: Colors.redAccent,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                              shadows: [Shadow(color: Colors.red, blurRadius: 4)],
+                            ),
+                          ),
+                        ],
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: _daySessionController.completedMissionsCount > 0 &&
+                                !(_daySessionController.currentSession?.isFinalized ?? true)
+                            ? () => _showEndDaySummary(context)
+                            : null,
+                        icon: const Icon(Icons.check_circle_outline, size: 20),
+                        label: const Text(
+                          'FINALIZAR DÍA',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.redAccent,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: Colors.grey.shade700,
+                          disabledForegroundColor: Colors.grey.shade500,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 12,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            side: const BorderSide(color: Colors.black, width: 2),
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(0),
-                      topRight: Radius.circular(24),
-                      bottomLeft: Radius.circular(24),
-                      bottomRight: Radius.circular(0),
-                    ),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        border: Border(
-                          left: BorderSide(color: Colors.red.shade700, width: 7),
-                          bottom: const BorderSide(color: Colors.black, width: 3),
-                          right: const BorderSide(color: Colors.black, width: 3),
-                          top: const BorderSide(color: Colors.black, width: 3),
+                ),
+                // Lista de misiones
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: _missionController.missions.length,
+                    itemBuilder: (context, index) {
+                      final mission = _missionController.missions[index];
+                      return Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.5),
+                              blurRadius: 10,
+                              offset: const Offset(4, 8),
+                            ),
+                          ],
                         ),
-                      ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                        onTap: () {
-                          _controller.toggleMission(index);
-                        },
-                        leading: CircleAvatar(
-                          backgroundColor: mission.isCompleted ? Colors.redAccent : Colors.black,
-                          radius: 26,
-                          child: Icon(
-                            mission.isCompleted ? Icons.check : Icons.flash_on,
-                            color: Colors.white,
-                            size: 28,
-                            shadows: const [Shadow(color: Colors.red, blurRadius: 6)],
+                        child: ClipRRect(
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(0),
+                            topRight: Radius.circular(24),
+                            bottomLeft: Radius.circular(24),
+                            bottomRight: Radius.circular(0),
                           ),
-                        ),
-                        title: Text(
-                          mission.title.toUpperCase(),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 18,
-                            color: Colors.black,
-                            letterSpacing: 1.2,
-                            shadows: [Shadow(color: Colors.red, blurRadius: 2, offset: Offset(1, 1))],
-                          ),
-                        ),
-                        subtitle: Padding(
-                          padding: const EdgeInsets.only(top: 8.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                mission.description,
-                                style: const TextStyle(
-                                  color: Color(0xFF232323),
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              border: Border(
+                                left: BorderSide(color: Colors.red.shade700, width: 7),
+                                bottom: const BorderSide(color: Colors.black, width: 3),
+                                right: const BorderSide(color: Colors.black, width: 3),
+                                top: const BorderSide(color: Colors.black, width: 3),
+                              ),
+                            ),
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                              onTap: () {
+                                _missionController.toggleMission(index);
+                              },
+                              leading: CircleAvatar(
+                                backgroundColor: mission.isCompleted ? Colors.redAccent : Colors.black,
+                                radius: 26,
+                                child: Icon(
+                                  mission.isCompleted ? Icons.check : Icons.flash_on,
+                                  color: Colors.white,
+                                  size: 28,
+                                  shadows: const [Shadow(color: Colors.red, blurRadius: 6)],
                                 ),
                               ),
-                              const SizedBox(height: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: Colors.red.shade700,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.black, width: 2),
+                              title: Text(
+                                mission.title.toUpperCase(),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 18,
+                                  color: Colors.black,
+                                  letterSpacing: 1.2,
+                                  shadows: [Shadow(color: Colors.red, blurRadius: 2, offset: Offset(1, 1))],
                                 ),
-                                child: Text(
-                                  mission.type.name.toUpperCase(),
-                                  style: const TextStyle(
-                                    fontStyle: FontStyle.italic,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 1.1,
+                              ),
+                              subtitle: Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      mission.description,
+                                      style: const TextStyle(
+                                        color: Color(0xFF232323),
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.shade700,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.black, width: 2),
+                                      ),
+                                      child: Text(
+                                        mission.type.name.toUpperCase(),
+                                        style: const TextStyle(
+                                          fontStyle: FontStyle.italic,
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: 1.1,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              trailing: Transform.rotate(
+                                angle: -0.1,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.yellow.shade700,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.black, width: 3),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.3),
+                                        blurRadius: 8,
+                                        offset: const Offset(2, 4),
+                                      ),
+                                    ],
                                   ),
+                                  child: Text(
+                                    '+${mission.xpReward} XP',
+                                    style: const TextStyle(
+                                      color: Colors.black,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 17,
+                                      letterSpacing: 1.2,
+                                      shadows: [Shadow(color: Colors.white, blurRadius: 2)],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+// Widget de diálogo para mostrar el resumen del día
+class _EndDaySummaryDialog extends StatelessWidget {
+  final EndDayResult result;
+
+  const _EndDaySummaryDialog({required this.result});
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 400),
+        decoration: BoxDecoration(
+          color: const Color(0xFF232323),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.redAccent, width: 3),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.redAccent.withOpacity(0.5),
+              blurRadius: 20,
+              spreadRadius: 5,
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Encabezado
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: const BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(13),
+                  topRight: Radius.circular(13),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.star,
+                    color: Colors.yellow.shade700,
+                    size: 32,
+                    shadows: const [Shadow(color: Colors.yellow, blurRadius: 10)],
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    '¡DÍA COMPLETADO!',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.5,
+                      shadows: [
+                        Shadow(color: Colors.redAccent, blurRadius: 8),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Icon(
+                    Icons.star,
+                    color: Colors.yellow.shade700,
+                    size: 32,
+                    shadows: const [Shadow(color: Colors.yellow, blurRadius: 10)],
+                  ),
+                ],
+              ),
+            ),
+            // Contenido
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  // XP Total
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.yellow.shade700, width: 2),
+                    ),
+                    child: Column(
+                      children: [
+                        const Text(
+                          'XP TOTAL GANADO',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '+${result.totalXpGained} XP',
+                          style: TextStyle(
+                            color: Colors.yellow.shade700,
+                            fontSize: 36,
+                            fontWeight: FontWeight.w900,
+                            shadows: const [
+                              Shadow(color: Colors.yellow, blurRadius: 8),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${result.missionsCompleted} misiones completadas',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  // Stats incrementadas
+                  if (result.statsGained.isNotEmpty) ...[
+                    const Text(
+                      'STATS INCREMENTADAS',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ...result.statsGained.entries.map((entry) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: _getStatColor(entry.key),
+                              width: 2,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                entry.key.name.toUpperCase(),
+                                style: TextStyle(
+                                  color: _getStatColor(entry.key),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.1,
+                                ),
+                              ),
+                              Text(
+                                '+${entry.value.toStringAsFixed(1)}',
+                                style: TextStyle(
+                                  color: _getStatColor(entry.key),
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                  shadows: [
+                                    Shadow(
+                                      color: _getStatColor(entry.key),
+                                      blurRadius: 4,
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        trailing: Transform.rotate(
-                          angle: -0.1,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: Colors.yellow.shade700,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.black, width: 3),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.3),
-                                  blurRadius: 8,
-                                  offset: const Offset(2, 4),
-                                ),
-                              ],
-                            ),
-                            child: Text(
-                              '+${mission.xpReward} XP',
-                              style: const TextStyle(
-                                color: Colors.black,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 17,
-                                letterSpacing: 1.2,
-                                shadows: [Shadow(color: Colors.white, blurRadius: 2)],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+                      );
+                    }).toList(),
+                  ],
+                ],
+              ),
+            ),
+            // Botón de cerrar
+            Padding(
+              padding: const EdgeInsets.only(bottom: 24, left: 24, right: 24),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.redAccent,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: const BorderSide(color: Colors.black, width: 3),
                     ),
                   ),
-                );
-              },
+                  child: const Text(
+                    'CONTINUAR',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                ),
+              ),
             ),
+          ],
+        ),
+      ),
     );
+  }
+
+  // Colores para cada tipo de stat
+  Color _getStatColor(StatType type) {
+    switch (type) {
+      case StatType.strength:
+        return Colors.red.shade400;
+      case StatType.intelligence:
+        return Colors.blue.shade400;
+      case StatType.creativity:
+        return Colors.purple.shade300;
+      case StatType.discipline:
+        return Colors.green.shade400;
+    }
   }
 }
