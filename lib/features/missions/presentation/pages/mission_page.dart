@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../controllers/mission_controller.dart';
 import '../controllers/day_session_controller.dart';
+import '../controllers/bonfire_controller.dart';
 import '../../data/datasources/mission_datasource.dart';
 import '../../data/datasources/day_session_datasource.dart';
 import '../../data/datasources/user_stats_datasource.dart';
+import '../../data/datasources/day_feedback_datasource.dart';
 import '../../data/repositories/mission_repository_impl.dart';
 import '../../data/repositories/day_session_repository_impl.dart';
 import '../../data/repositories/user_stats_repository_impl.dart';
+import '../../data/repositories/day_feedback_repository_impl.dart';
 import '../../domain/usecases/day_session_usecase.dart';
+import '../../domain/usecases/day_feedback_usecase.dart';
 import '../../domain/entities/stat_type.dart';
 import 'user_stats_page.dart';
+import 'bonfire_page.dart';
 
 class MissionsPage extends StatefulWidget {
   const MissionsPage({super.key});
@@ -74,26 +80,61 @@ class _MissionsPageState extends State<MissionsPage> {
     });
   }
   
-  // Método para mostrar el diálogo de resumen del día
+  // Método para navegar a la pantalla de Bonfire después de finalizar el día
   void _showEndDaySummary(BuildContext context) async {
+    // Finalizar el día (calcula y aplica stats)
     final result = await _daySessionController.endDay();
     
     if (result == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('No hay misiones completadas o el día ya fue finalizado'),
+          content: Text('El día ya fue finalizado'),
           backgroundColor: Colors.orange,
         ),
       );
       return;
     }
     
+    // Obtener datos para el Bonfire
+    final bonfireData = _daySessionController.getBonfireData();
+    if (bonfireData == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Error al preparar datos para Bonfire'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Crear controller de Bonfire (con todas las dependencias)
+    final feedbackDataSource = DayFeedbackDataSourceDummy();
+    final feedbackRepository = DayFeedbackRepositoryImpl(
+      dataSource: feedbackDataSource,
+    );
+    final bonfireController = BonfireController(
+      saveFeedbackUseCase: SaveFeedbackUseCase(feedbackRepository),
+      getFeedbackHistoryUseCase: GetFeedbackHistoryUseCase(feedbackRepository),
+      analyzeFeedbackTrendsUseCase: AnalyzeFeedbackTrendsUseCase(feedbackRepository),
+      generateAIPromptUseCase: GenerateAIPromptUseCase(feedbackRepository),
+    );
+
+    // Navegar a la pantalla de Bonfire
     if (!mounted) return;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => _EndDaySummaryDialog(result: result),
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ChangeNotifierProvider.value(
+          value: bonfireController,
+          child: BonfirePage(
+            sessionId: bonfireData.sessionId,
+            completedMissions: bonfireData.completedMissions,
+            totalStatsGained: bonfireData.totalStatsGained,
+            daySessionController: _daySessionController,
+          ),
+        ),
+      ),
     );
   }
 
@@ -172,8 +213,7 @@ class _MissionsPageState extends State<MissionsPage> {
                         ],
                       ),
                       ElevatedButton.icon(
-                        onPressed: _daySessionController.completedMissionsCount > 0 &&
-                                !(_daySessionController.currentSession?.isFinalized ?? true)
+                        onPressed: !(_daySessionController.currentSession?.isFinalized ?? true)
                             ? () => _showEndDaySummary(context)
                             : null,
                         icon: const Icon(Icons.check_circle_outline, size: 20),
