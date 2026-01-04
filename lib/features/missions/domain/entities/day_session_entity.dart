@@ -1,31 +1,32 @@
 // domain/entities/day_session_entity.dart
 import 'mission_entity.dart';
+import '../../../../core/time/date_time_extensions.dart';
 
 class DaySession {
   final String id;
   final DateTime date;
   final List<Mission> completedMissions;
-  final bool isFinalized;
+  final bool isClosed;
 
   DaySession({
     required this.id,
-    required this.date,
+    required DateTime date,
     required this.completedMissions,
-    this.isFinalized = false,
-  });
+    this.isClosed = false,
+  }) : date = date.stripped;
 
   // Método copyWith para inmutabilidad
   DaySession copyWith({
     String? id,
     DateTime? date,
     List<Mission>? completedMissions,
-    bool? isFinalized,
+    bool? isClosed,
   }) {
     return DaySession(
       id: id ?? this.id,
-      date: date ?? this.date,
+      date: (date ?? this.date).stripped,
       completedMissions: completedMissions ?? List.from(this.completedMissions),
-      isFinalized: isFinalized ?? this.isFinalized,
+      isClosed: isClosed ?? this.isClosed,
     );
   }
 
@@ -47,11 +48,11 @@ class DaySession {
 
   // Finalizar el día
   DaySession finalize() {
-    return copyWith(isFinalized: true);
+    return copyWith(isClosed: true);
   }
 
   @override
   String toString() {
-    return 'DaySession(id: $id, date: $date, completedMissions: ${completedMissions.length}, isFinalized: $isFinalized)';
+    return 'DaySession(id: $id, date: $date, completedMissions: ${completedMissions.length}, isClosed: $isClosed)';
   }
 }

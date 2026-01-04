@@ -4,8 +4,8 @@ import '../../domain/entities/stat_type.dart';
 
 class UserStatsModel extends UserStats {
   UserStatsModel({
-    required Map<StatType, double> stats,
-  }) : super(stats: stats);
+    required super.stats,
+  });
 
   // Factory para convertir JSON a UserStatsModel
   factory UserStatsModel.fromJson(Map<String, dynamic> json) {
@@ -13,8 +13,10 @@ class UserStatsModel extends UserStats {
       stats: {
         StatType.strength: (json['strength'] as num?)?.toDouble() ?? 0.0,
         StatType.intelligence: (json['intelligence'] as num?)?.toDouble() ?? 0.0,
-        StatType.creativity: (json['creativity'] as num?)?.toDouble() ?? 0.0,
-        StatType.discipline: (json['discipline'] as num?)?.toDouble() ?? 0.0,
+        StatType.charisma: (json['charisma'] as num?)?.toDouble() ?? 0.0,
+        StatType.vitality: (json['vitality'] as num?)?.toDouble() ?? 0.0,
+        StatType.dexterity: (json['dexterity'] as num?)?.toDouble() ?? 0.0,
+        StatType.wisdom: (json['wisdom'] as num?)?.toDouble() ?? 0.0,
       },
     );
   }
@@ -24,8 +26,10 @@ class UserStatsModel extends UserStats {
     return {
       'strength': stats[StatType.strength],
       'intelligence': stats[StatType.intelligence],
-      'creativity': stats[StatType.creativity],
-      'discipline': stats[StatType.discipline],
+      'charisma': stats[StatType.charisma],
+      'vitality': stats[StatType.vitality],
+      'dexterity': stats[StatType.dexterity],
+      'wisdom': stats[StatType.wisdom],
     };
   }
 

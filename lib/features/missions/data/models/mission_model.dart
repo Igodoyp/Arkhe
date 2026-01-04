@@ -3,20 +3,13 @@ import '../../domain/entities/mission_entity.dart';
 import '../../domain/entities/stat_type.dart';
 class MissionModel extends Mission {
   MissionModel({
-    required String id,
-    required String title,
-    required String description,
-    required StatType type,
-    required int xpReward,
-    bool isCompleted = false,
-  }) : super(
-          id: id,
-          title: title,
-          description: description,
-          xpReward: xpReward,
-          type: type,
-          isCompleted: isCompleted,
-        );
+    required super.id,
+    required super.title,
+    required super.description,
+    required super.type,
+    required super.xpReward,
+    super.isCompleted,
+  });
 
   // Factory para convertir el JSON (o Map) en objeto
   factory MissionModel.fromJson(Map<String, dynamic> json) {

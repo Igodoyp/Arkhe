@@ -3,24 +3,26 @@ import '../../domain/entities/mission_entity.dart';
 import '../../domain/entities/stat_type.dart';
 
 class MissionCard extends StatelessWidget {
-  final MissionEntity mission;
+  final Mission mission;
   final VoidCallback onTap; // Función que se ejecuta al tocar
 
-  const MissionCard({required this.mission, required this.onTap});
+  const MissionCard({super.key, required this.mission, required this.onTap});
 
   // Función auxiliar para elegir color según el Stat (UX Visual)
   Color _getColorForStat(StatType stat) {
     switch (stat) {
       case StatType.strength: return Colors.redAccent;
       case StatType.intelligence: return Colors.blueAccent;
-      case StatType.creativity: return Colors.purpleAccent;
-      case StatType.discipline: return Colors.amber; // O amarillo
+      case StatType.charisma: return Colors.yellowAccent;
+      case StatType.vitality: return Colors.green;
+      case StatType.dexterity: return Colors.orange;
+      case StatType.wisdom: return Colors.purpleAccent;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final color = _getColorForStat(mission.stat);
+    final color = _getColorForStat(mission.type);
 
     return Card(
       margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
@@ -50,7 +52,7 @@ class MissionCard extends StatelessWidget {
               children: [
                 _RewardChip(label: "+${mission.xpReward} XP", color: Colors.grey),
                 SizedBox(width: 5),
-                _RewardChip(label: "+ ${mission.stat.name}", color: color),
+                _RewardChip(label: "+ ${mission.type.name}", color: color),
               ],
             )
           ],

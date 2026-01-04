@@ -3,19 +3,33 @@ import 'package:provider/provider.dart';
 import '../controllers/mission_controller.dart';
 import '../controllers/day_session_controller.dart';
 import '../controllers/bonfire_controller.dart';
-import '../../data/datasources/mission_datasource.dart';
-import '../../data/datasources/day_session_datasource.dart';
 import '../../data/datasources/user_stats_datasource.dart';
 import '../../data/datasources/day_feedback_datasource.dart';
+import '../../data/datasources/user_profile_datasource.dart';
+import '../../data/datasources/local/drift/database.dart';
+import '../../data/datasources/local/drift/mission_local_datasource_drift.dart';
+import '../../data/datasources/local/drift/day_session_local_datasource_drift.dart';
 import '../../data/repositories/mission_repository_impl.dart';
 import '../../data/repositories/day_session_repository_impl.dart';
 import '../../data/repositories/user_stats_repository_impl.dart';
 import '../../data/repositories/day_feedback_repository_impl.dart';
+import '../../data/repositories/user_profile_repository_impl.dart';
 import '../../domain/usecases/day_session_usecase.dart';
 import '../../domain/usecases/day_feedback_usecase.dart';
+import '../../domain/usecases/get_daily_missions_usecase.dart';
+import '../../domain/usecases/generate_daily_missions_usecase.dart';
+import '../../domain/usecases/ensure_missions_for_date_usecase.dart';
+import '../../domain/usecases/watch_missions_for_date_usecase.dart';
+import '../../domain/services/mission_orchestration_service.dart';
+import '../../data/services/gemini_service.dart';
+import '../../../../core/time/real_time_provider.dart';
+import '../../../../core/haptic/haptic_service.dart';
 import '../../domain/entities/stat_type.dart';
 import 'user_stats_page.dart';
 import 'bonfire_page.dart';
+import '../widgets/bonfire_page_route.dart';
+import '../widgets/celebration_effects.dart';
+import '../widgets/shimmer_loading.dart';
 
 class MissionsPage extends StatefulWidget {
   const MissionsPage({super.key});
@@ -35,17 +49,33 @@ class _MissionsPageState extends State<MissionsPage> {
     
     // === Inyección de Dependencias Manual ===
     
-    // 1. DataSources
-    final missionDataSource = MissionGeminiDummyDataSourceImpl();
-    final daySessionDataSource = DaySessionDummyDataSourceImpl();
-    final userStatsDataSource = StatsDummyDataSourceImpl();
+    // 1. Database (Drift)
+    final database = AppDatabase();
     
-    // 2. Repositories
-    final missionRepository = MissionRepositoryImpl(remoteDataSource: missionDataSource);
-    final daySessionRepository = DaySessionRepositoryImpl(dataSource: daySessionDataSource);
+    // 1.1. Time Provider (para inyección de tiempo)
+    final timeProvider = RealTimeProvider();
+    
+    // 2. Local DataSources (Drift)
+    final missionLocalDataSource = MissionLocalDataSourceDrift(database: database);
+    final daySessionLocalDataSource = DaySessionLocalDataSourceDrift(database: database);
+    final userStatsDataSource = StatsDummyDataSourceImpl(); // TODO: Migrar a Drift
+    final dayFeedbackDataSource = DayFeedbackDataSourceDummy();
+    final userProfileDataSource = UserProfileDummyDataSourceImpl();
+    
+    // 3. Repositories
+    final missionRepository = MissionRepositoryImpl(
+      localDataSource: missionLocalDataSource,
+      timeProvider: timeProvider,
+    );
+    final daySessionRepository = DaySessionRepositoryImpl(
+      localDataSource: daySessionLocalDataSource,
+      timeProvider: timeProvider,
+    );
     final userStatsRepository = UserStatsRepositoryImpl(remoteDataSource: userStatsDataSource);
+    final dayFeedbackRepository = DayFeedbackRepositoryImpl(dataSource: dayFeedbackDataSource);
+    final userProfileRepository = UserProfileRepositoryImpl(dataSource: userProfileDataSource);
     
-    // 3. Use Cases
+    // 4. Use Cases
     final getCurrentDaySessionUseCase = GetCurrentDaySessionUseCase(daySessionRepository);
     final addCompletedMissionUseCase = AddCompletedMissionUseCase(daySessionRepository);
     final removeCompletedMissionUseCase = RemoveCompletedMissionUseCase(daySessionRepository);
@@ -54,7 +84,36 @@ class _MissionsPageState extends State<MissionsPage> {
       userStatsRepository: userStatsRepository,
     );
     
-    // 4. Controllers
+    // 4.1. AI Services
+    final geminiService = GeminiService(apiKey: ''); // TODO: Add real API key from env
+    
+    // 4.2. Mission Generation UseCase
+    final generateDailyMissionsUseCase = GenerateDailyMissionsUseCase(
+      userProfileRepository: userProfileRepository,
+      daySessionRepository: daySessionRepository,
+      dayFeedbackRepository: dayFeedbackRepository,
+      userStatsRepository: userStatsRepository,
+      geminiService: geminiService,
+      missionRepository: missionRepository,
+    );
+    
+    // 4.3. Mission Orchestration Service
+    final orchestrationService = MissionOrchestrationService(
+      getDailyMissionsUseCase: GetDailyMissionsUseCase(missionRepository: missionRepository),
+      generateDailyMissionsUseCase: generateDailyMissionsUseCase,
+      missionRepository: missionRepository,
+      timeProvider: timeProvider,
+    );
+    
+    // 4.4. Mission UseCases (Formales para Controller)
+    final ensureMissionsUseCase = EnsureMissionsForDateUseCase(
+      orchestrationService: orchestrationService,
+    );
+    final watchMissionsUseCase = WatchMissionsForDateUseCase(
+      repository: missionRepository,
+    );
+    
+    // 5. Controllers
     _daySessionController = DaySessionController(
       getCurrentDaySessionUseCase: getCurrentDaySessionUseCase,
       addCompletedMissionUseCase: addCompletedMissionUseCase,
@@ -63,7 +122,10 @@ class _MissionsPageState extends State<MissionsPage> {
     );
     
     _missionController = MissionController(
-      repository: missionRepository,
+      ensureMissionsUseCase: ensureMissionsUseCase,
+      watchMissionsUseCase: watchMissionsUseCase,
+      missionRepository: missionRepository,
+      timeProvider: timeProvider,
       daySessionController: _daySessionController,
     );
     
@@ -82,6 +144,9 @@ class _MissionsPageState extends State<MissionsPage> {
   
   // Método para navegar a la pantalla de Bonfire después de finalizar el día
   void _showEndDaySummary(BuildContext context) async {
+    // Haptic feedback épico para end of day
+    await HapticService.endOfDay();
+    
     // Finalizar el día (calcula y aplica stats)
     final result = await _daySessionController.endDay();
     
@@ -121,10 +186,10 @@ class _MissionsPageState extends State<MissionsPage> {
       generateAIPromptUseCase: GenerateAIPromptUseCase(feedbackRepository),
     );
 
-    // Navegar a la pantalla de Bonfire
+    // Navegar a la pantalla de Bonfire con transición épica
     if (!mounted) return;
     Navigator.of(context).push(
-      MaterialPageRoute(
+      BonfirePageRoute(
         builder: (context) => ChangeNotifierProvider.value(
           value: bonfireController,
           child: BonfirePage(
@@ -172,83 +237,205 @@ class _MissionsPageState extends State<MissionsPage> {
           ),
         ],
       ),
-      body: _missionController.isLoading
-          ? const Center(child: CircularProgressIndicator(color: Colors.redAccent))
-          : Column(
+      body: _buildBody(),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          _missionController.refreshMissions();
+        },
+        backgroundColor: Colors.red.shade700,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.refresh, size: 28),
+        label: const Text(
+          'REGENERAR',
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.2,
+            fontSize: 16,
+          ),
+        ),
+      ),
+    );
+  }
+  
+  /// Construye el cuerpo de la pantalla según el estado del controller
+  /// 
+  /// ESTADOS:
+  /// 1. isLoading = true → Skeleton loader (shimmer)
+  /// 2. errorMessage != null → Vista de error con botón "Reintentar"
+  /// 3. missions.isEmpty && isGenerating → "Generando misiones..."
+  /// 4. missions.isNotEmpty → Lista de misiones
+  Widget _buildBody() {
+    // ESTADO 1: Loading (primera carga) con shimmer
+    if (_missionController.isLoading) {
+      return Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            ...List.generate(5, (index) => const MissionCardSkeleton()),
+          ],
+        ),
+      );
+    }
+    
+    // ESTADO 2: Error
+    if (_missionController.errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, color: Colors.redAccent, size: 64),
+            const SizedBox(height: 16),
+            Text(
+              'ERROR AL CARGAR MISIONES',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _missionController.errorMessage!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.grey,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () {
+                _missionController.loadMissions();
+              },
+              icon: const Icon(Icons.refresh),
+              label: const Text(
+                'REINTENTAR',
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    // ESTADO 3: Generando misiones (lista vacía)
+    if (_missionController.missions.isEmpty && _missionController.isGenerating) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(color: Colors.redAccent),
+            SizedBox(height: 16),
+            Text(
+              'GENERANDO MISIONES...',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.5,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Morgana está preparando tus desafíos...',
+              style: TextStyle(
+                color: Colors.grey,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    // ESTADO 4: Lista de misiones
+    return Column(
+        children: [
+          // Barra de información con contador y botón "Finalizar Día"
+          Container(
+            padding: const EdgeInsets.all(16),
+            margin: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.redAccent, width: 2),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Barra de información con contador y botón "Finalizar Día"
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  margin: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.redAccent, width: 2),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'MISIONES COMPLETADAS',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${_daySessionController.completedMissionsCount} / ${_missionController.missions.length}',
+                      style: const TextStyle(
+                        color: Colors.redAccent,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        shadows: [Shadow(color: Colors.red, blurRadius: 4)],
+                      ),
+                    ),
+                  ],
+                ),
+                ElevatedButton.icon(
+                  onPressed: !(_daySessionController.currentSession?.isClosed ?? true)
+                      ? () => _showEndDaySummary(context)
+                      : null,
+                  icon: const Icon(Icons.check_circle_outline, size: 20),
+                  label: const Text(
+                    'FINALIZAR DÍA',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.2,
+                    ),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'MISIONES COMPLETADAS',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 1.2,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${_daySessionController.completedMissionsCount} / ${_missionController.missions.length}',
-                            style: const TextStyle(
-                              color: Colors.redAccent,
-                              fontSize: 24,
-                              fontWeight: FontWeight.w900,
-                              shadows: [Shadow(color: Colors.red, blurRadius: 4)],
-                            ),
-                          ),
-                        ],
-                      ),
-                      ElevatedButton.icon(
-                        onPressed: !(_daySessionController.currentSession?.isFinalized ?? true)
-                            ? () => _showEndDaySummary(context)
-                            : null,
-                        icon: const Icon(Icons.check_circle_outline, size: 20),
-                        label: const Text(
-                          'FINALIZAR DÍA',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.redAccent,
-                          foregroundColor: Colors.white,
-                          disabledBackgroundColor: Colors.grey.shade700,
-                          disabledForegroundColor: Colors.grey.shade500,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 12,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            side: const BorderSide(color: Colors.black, width: 2),
-                          ),
-                        ),
-                      ),
-                    ],
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.redAccent,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: Colors.grey.shade700,
+                    disabledForegroundColor: Colors.grey.shade500,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: const BorderSide(color: Colors.black, width: 2),
+                    ),
                   ),
                 ),
-                // Lista de misiones
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: _missionController.missions.length,
+              ],
+            ),
+          ),
+          // Lista de misiones
+          Expanded(
+            child: ListView.builder(
+              itemCount: _missionController.missions.length,
                     itemBuilder: (context, index) {
                       final mission = _missionController.missions[index];
-                      return Container(
+                      return ConfettiCelebration(
+                        isCompleted: mission.isCompleted,
+                        primaryColor: Colors.orange,
+                        child: Container(
                         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                         decoration: BoxDecoration(
                           boxShadow: [
@@ -278,7 +465,9 @@ class _MissionsPageState extends State<MissionsPage> {
                             ),
                             child: ListTile(
                               contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                              onTap: () {
+                              onTap: () async {
+                                // Haptic feedback ANTES de cambiar estado
+                                await HapticService.celebration();
                                 _missionController.toggleMission(index);
                               },
                               leading: CircleAvatar(
@@ -366,13 +555,13 @@ class _MissionsPageState extends State<MissionsPage> {
                             ),
                           ),
                         ),
+                      ),
                       );
                     },
                   ),
                 ),
               ],
-            ),
-    );
+            );
   }
 }
 
@@ -552,7 +741,7 @@ class _EndDaySummaryDialog extends StatelessWidget {
                           ),
                         ),
                       );
-                    }).toList(),
+                    }),
                   ],
                 ],
               ),
@@ -599,10 +788,14 @@ class _EndDaySummaryDialog extends StatelessWidget {
         return Colors.red.shade400;
       case StatType.intelligence:
         return Colors.blue.shade400;
-      case StatType.creativity:
-        return Colors.purple.shade300;
-      case StatType.discipline:
+      case StatType.charisma:
+        return Colors.yellow.shade600;
+      case StatType.vitality:
         return Colors.green.shade400;
+      case StatType.dexterity:
+        return Colors.orange.shade400;
+      case StatType.wisdom:
+        return Colors.purple.shade300;
     }
   }
 }

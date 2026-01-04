@@ -6,15 +6,22 @@ import 'package:provider/provider.dart';
 
 // 1. Capa de Infraestructura (Data)
 import 'features/missions/data/repositories/mission_repository_impl.dart';
-import 'features/missions/data/datasources/mission_datasource.dart';
+import 'features/missions/data/datasources/local/drift/database.dart';
+import 'features/missions/data/datasources/local/drift/mission_local_datasource_drift.dart';
 
 // 2. Capa de Dominio (UseCases)
 import 'features/missions/domain/usecases/get_missions_usecase.dart';
 import 'features/missions/domain/usecases/toggle_mission_usecase.dart';
 
+// 3. Time Provider
+import 'core/time/time_provider.dart';
+import 'core/time/real_time_provider.dart';
+
+// 4. Presentación (Providers)
+
 // 3. Capa de Presentación (Provider y UI)
 import 'features/missions/presentation/providers/mission_provider.dart';
-import 'features/missions/presentation/pages/mission_page.dart';
+import 'features/missions/presentation/pages/splash_page.dart';
 
 void main() {
   // Asegura que el motor de Flutter esté listo antes de cualquier lógica
@@ -25,12 +32,18 @@ void main() {
   // Aquí conectamos las piezas. Si cambiamos una pieza, solo tocamos aquí.
   // ---------------------------------------------------------
 
-  // A. Nivel Bajo: Creamos el Repositorio (El almacén de datos)
+  // A. Nivel Bajo: Creamos la base de datos y datasources
+  final database = AppDatabase();
+  final missionLocalDataSource = MissionLocalDataSourceDrift(database: database);
+  final timeProvider = RealTimeProvider();
+  
+  // B. Creamos el Repositorio (El almacén de datos)
   final missionRepository = MissionRepositoryImpl(
-    remoteDataSource: MissionGeminiDummyDataSourceImpl(),
+    localDataSource: missionLocalDataSource,
+    timeProvider: timeProvider,
   );
 
-  // B. Nivel Medio: Creamos los Casos de Uso (Las órdenes de trabajo)
+  // C. Nivel Medio: Creamos los Casos de Uso (Las órdenes de trabajo)
   // Les "inyectamos" el repositorio que acabamos de crear.
   final getMissionsUseCase = GetMissionsUseCase(missionRepository);
   final toggleMissionUseCase = ToggleMissionUseCase(missionRepository);
@@ -42,7 +55,7 @@ void main() {
     // MultiProvider permite tener varios "departamentos" (Providers) activos.
     MultiProvider(
       providers: [
-        // C. Nivel Alto: Creamos el Provider (La sala de control)
+        // D. Nivel Alto: Creamos el Provider (La sala de control)
         // Le inyectamos los UseCases.
         ChangeNotifierProvider(
           create: (_) => MissionProvider(
@@ -81,7 +94,8 @@ class RPGApp extends StatelessWidget {
       ),
       
       // PUNTO DE ENTRADA VISUAL
-      home: MissionsPage(),
+      // Comienza con SplashPage que verifica onboarding
+      home: const SplashPage(),
     );
   }
 }

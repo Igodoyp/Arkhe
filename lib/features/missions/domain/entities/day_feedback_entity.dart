@@ -1,4 +1,5 @@
 // domain/entities/day_feedback_entity.dart
+import '../../../../core/time/date_time_extensions.dart';
 
 // ============================================================================
 // ENTIDAD: DAY FEEDBACK
@@ -103,14 +104,15 @@ class DayFeedback {
 
   DayFeedback({
     required this.sessionId,
-    required this.date,
+    required DateTime date,
     required this.difficulty,
     required this.energyLevel,
     required this.struggledMissions,
     required this.easyMissions,
     required this.notes,
   }) : assert(energyLevel >= 1 && energyLevel <= 5, 
-              'Energy level debe estar entre 1 y 5');
+              'Energy level debe estar entre 1 y 5'),
+       date = date.stripped;
 
   // ========== Método copyWith (Inmutabilidad) ==========
   /// Crea una copia de la entidad con algunos campos modificados
@@ -125,7 +127,7 @@ class DayFeedback {
   }) {
     return DayFeedback(
       sessionId: sessionId ?? this.sessionId,
-      date: date ?? this.date,
+      date: (date ?? this.date).stripped,
       difficulty: difficulty ?? this.difficulty,
       energyLevel: energyLevel ?? this.energyLevel,
       struggledMissions: struggledMissions ?? List.from(this.struggledMissions),

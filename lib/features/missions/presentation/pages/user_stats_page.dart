@@ -97,6 +97,14 @@ class _StatsPageState extends State<StatsPage> {
                       child: StatsRadarChart(stats: _controller.statsMap),
                     ),
                     const SizedBox(height: 40),
+                    const SizedBox(height: 40),
+                    // Radar Chart
+                    SizedBox(
+                      height: 320,
+                      child: StatsRadarChart(stats: _controller.statsMap),
+                    ),
+                    const SizedBox(height: 40),
+                    // Desglose de Stats con iconos y colores
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
@@ -112,59 +120,114 @@ class _StatsPageState extends State<StatsPage> {
                         ],
                       ),
                       child: Column(
-                        children: StatType.values.map((type) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    width: 12,
-                                    height: 12,
-                                    decoration: const BoxDecoration(
-                                      color: Colors.redAccent,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    type.name.toUpperCase(),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 16,
-                                      letterSpacing: 1.1,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.amber.shade700,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.black, width: 2),
-                                ),
-                                child: Text(
-                                  '${_controller.statsMap[type]?.toStringAsFixed(0) ?? '0'} / 100',
-                                  style: const TextStyle(
-                                    color: Colors.black,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 15,
-                                    letterSpacing: 1.1,
-                                  ),
-                                ),
-                              ),
-                            ],
+                        children: [
+                          const Text(
+                            'DESGLOSE DE ATRIBUTOS',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 16,
+                              letterSpacing: 1.5,
+                              shadows: [Shadow(color: Colors.red, blurRadius: 4)],
+                            ),
                           ),
-                        )).toList(),
+                          const SizedBox(height: 16),
+                          ...StatType.values.map((type) => _buildStatRow(type)),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
             ),
+    );
+  }
+  
+  /// Widget para mostrar una fila de stat con icono, nombre, barra y valor
+  Widget _buildStatRow(StatType type) {
+    final value = _controller.statsMap[type] ?? 0.0;
+    final percentage = value / 100.0;
+    
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Nombre + Valor
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    type.icon,
+                    color: type.color,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    type.name.toUpperCase(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                ],
+              ),
+              Text(
+                '${value.toInt()}',
+                style: TextStyle(
+                  color: type.color,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18,
+                  shadows: const [
+                    Shadow(color: Colors.black, blurRadius: 4),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          // Barra de progreso
+          Stack(
+            children: [
+              // Fondo de la barra
+              Container(
+                height: 12,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade900,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.white24, width: 1),
+                ),
+              ),
+              // Relleno de la barra
+              FractionallySizedBox(
+                widthFactor: percentage,
+                child: Container(
+                  height: 12,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        type.color.withOpacity(0.6),
+                        type.color,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(6),
+                    boxShadow: [
+                      BoxShadow(
+                        color: type.color.withOpacity(0.5),
+                        blurRadius: 4,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

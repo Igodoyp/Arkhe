@@ -12,11 +12,14 @@ abstract class StatsRemoteDataSource {
 // 2. La Implementación "Dummy"
 class StatsDummyDataSourceImpl implements StatsRemoteDataSource {
   // Simulación de stats del usuario guardadas en memoria
-  Map<StatType, double> _userStats = {
+  // Sistema de 6 stats: Strength, Intelligence, Charisma, Vitality, Dexterity, Wisdom
+  final Map<StatType, double> _userStats = {
     StatType.strength: 32.0,
     StatType.intelligence: 50.0,
-    StatType.creativity: 25.0,
-    StatType.discipline: 30.0,
+    StatType.charisma: 25.0,
+    StatType.vitality: 40.0,
+    StatType.dexterity: 35.0,
+    StatType.wisdom: 28.0,
   };
 
   @override
@@ -28,8 +31,10 @@ class StatsDummyDataSourceImpl implements StatsRemoteDataSource {
     return {
       'strength': _userStats[StatType.strength],
       'intelligence': _userStats[StatType.intelligence],
-      'creativity': _userStats[StatType.creativity],
-      'discipline': _userStats[StatType.discipline],
+      'charisma': _userStats[StatType.charisma],
+      'vitality': _userStats[StatType.vitality],
+      'dexterity': _userStats[StatType.dexterity],
+      'wisdom': _userStats[StatType.wisdom],
     };
   }
 
@@ -41,8 +46,10 @@ class StatsDummyDataSourceImpl implements StatsRemoteDataSource {
     // Actualiza las stats en memoria (simulando persistencia)
     _userStats[StatType.strength] = statsJson['strength'] ?? _userStats[StatType.strength];
     _userStats[StatType.intelligence] = statsJson['intelligence'] ?? _userStats[StatType.intelligence];
-    _userStats[StatType.creativity] = statsJson['creativity'] ?? _userStats[StatType.creativity];
-    _userStats[StatType.discipline] = statsJson['discipline'] ?? _userStats[StatType.discipline];
+    _userStats[StatType.charisma] = statsJson['charisma'] ?? _userStats[StatType.charisma];
+    _userStats[StatType.vitality] = statsJson['vitality'] ?? _userStats[StatType.vitality];
+    _userStats[StatType.dexterity] = statsJson['dexterity'] ?? _userStats[StatType.dexterity];
+    _userStats[StatType.wisdom] = statsJson['wisdom'] ?? _userStats[StatType.wisdom];
     
     print('Stats actualizadas: $_userStats');
   }

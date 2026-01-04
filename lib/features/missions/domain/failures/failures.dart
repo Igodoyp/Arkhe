@@ -12,22 +12,22 @@ abstract class Failure {
 
 /// Error de red/servidor
 class ServerFailure extends Failure {
-  const ServerFailure(String message) : super(message);
+  const ServerFailure(super.message);
 }
 
 /// Error de caché/almacenamiento local
 class CacheFailure extends Failure {
-  const CacheFailure(String message) : super(message);
+  const CacheFailure(super.message);
 }
 
 /// Error de validación
 class ValidationFailure extends Failure {
-  const ValidationFailure(String message) : super(message);
+  const ValidationFailure(super.message);
 }
 
 /// Error cuando no se encuentra un recurso
 class NotFoundFailure extends Failure {
-  const NotFoundFailure(String message) : super(message);
+  const NotFoundFailure(super.message);
 }
 
 /// Error cuando el día ya está finalizado

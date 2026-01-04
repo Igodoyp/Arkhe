@@ -1,4 +1,5 @@
 // data/datasources/day_session_datasource.dart
+import '../../../../core/time/date_time_extensions.dart';
 
 // ============================================================================
 // 1. INTERFAZ DEL DATASOURCE (Contrato/Abstracción)
@@ -48,15 +49,15 @@ class DaySessionDummyDataSourceImpl implements DaySessionDataSource {
     // 2. Se llamó a clearCurrentSession() (nuevo día)
     // 3. La app se reinició (memoria se limpió)
     // 4. La sesión anterior ya fue finalizada (después de Bonfire)
-    final isFinalized = _currentSession?['isFinalized'] as bool? ?? false;
+    final isClosed = _currentSession?['isClosed'] as bool? ?? false;
     
-    if (_currentSession == null || isFinalized) {
-      final now = DateTime.now();
+    if (_currentSession == null || isClosed) {
+      final now = DateTime.now().stripped;
       
       // Crear una sesión nueva con estructura predefinida
       _currentSession = {
         // ID único basado en la fecha Y timestamp para permitir múltiples sesiones por día (testing)
-        'id': 'session_${now.year}_${now.month}_${now.day}_${now.millisecondsSinceEpoch}',
+        'id': 'session_${now.year}_${now.month}_${now.day}_${DateTime.now().millisecondsSinceEpoch}',
         
         // Fecha de la sesión en formato ISO8601 (ej: "2025-12-28T14:30:00.000")
         'date': now.toIso8601String(),
@@ -67,7 +68,7 @@ class DaySessionDummyDataSourceImpl implements DaySessionDataSource {
         // Bandera que indica si el día ya fue finalizado
         // false = aún puedes marcar misiones
         // true = día cerrado, stats ya aplicadas
-        'isFinalized': false,
+        'isClosed': false,
       };
       
       print('[DaySessionDataSource] 🆕 Nueva sesión creada: ${_currentSession!['id']}');
@@ -88,7 +89,7 @@ class DaySessionDummyDataSourceImpl implements DaySessionDataSource {
     // Actualiza la sesión en memoria.
     // Esto se llama cada vez que:
     // - Se marca/desmarca una misión (actualiza completedMissions)
-    // - Se finaliza el día (actualiza isFinalized)
+    // - Se finaliza el día (actualiza isClosed)
     _currentSession = sessionJson;
     
     print('DaySessionDataSource: Sesión guardada: $sessionJson');
@@ -107,7 +108,7 @@ class DaySessionDummyDataSourceImpl implements DaySessionDataSource {
       // Marca la sesión como finalizada.
       // Una vez true, no se pueden agregar más misiones completadas.
       // El botón "Finalizar Día" se deshabilita cuando esto es true.
-      _currentSession!['isFinalized'] = true;
+      _currentSession!['isClosed'] = true;
       
       print('DaySessionDataSource: Día finalizado: $sessionId');
     }

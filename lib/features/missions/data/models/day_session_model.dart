@@ -2,19 +2,15 @@
 import '../../domain/entities/day_session_entity.dart';
 import '../../domain/entities/mission_entity.dart';
 import 'mission_model.dart';
+import '../../../../core/time/date_time_extensions.dart';
 
 class DaySessionModel extends DaySession {
   DaySessionModel({
-    required String id,
-    required DateTime date,
-    required List<Mission> completedMissions,
-    bool isFinalized = false,
-  }) : super(
-          id: id,
-          date: date,
-          completedMissions: completedMissions,
-          isFinalized: isFinalized,
-        );
+    required super.id,
+    required super.date,
+    required super.completedMissions,
+    super.isClosed,
+  });
 
   // Factory para convertir JSON a DaySessionModel
   factory DaySessionModel.fromJson(Map<String, dynamic> json) {
@@ -25,9 +21,9 @@ class DaySessionModel extends DaySession {
 
     return DaySessionModel(
       id: json['id'] as String,
-      date: DateTime.parse(json['date'] as String),
+      date: DateTime.parse(json['date'] as String).stripped,
       completedMissions: missions,
-      isFinalized: json['isFinalized'] as bool? ?? false,
+      isClosed: json['isClosed'] as bool? ?? false,
     );
   }
 
@@ -39,7 +35,7 @@ class DaySessionModel extends DaySession {
       'completedMissions': completedMissions
           .map((mission) => _missionToJson(mission))
           .toList(),
-      'isFinalized': isFinalized,
+      'isClosed': isClosed,
     };
   }
 
@@ -61,13 +57,13 @@ class DaySessionModel extends DaySession {
     String? id,
     DateTime? date,
     List<Mission>? completedMissions,
-    bool? isFinalized,
+    bool? isClosed,
   }) {
     return DaySessionModel(
       id: id ?? this.id,
       date: date ?? this.date,
       completedMissions: completedMissions ?? List.from(this.completedMissions),
-      isFinalized: isFinalized ?? this.isFinalized,
+      isClosed: isClosed ?? this.isClosed,
     );
   }
 
@@ -89,6 +85,6 @@ class DaySessionModel extends DaySession {
 
   @override
   DaySessionModel finalize() {
-    return copyWith(isFinalized: true);
+    return copyWith(isClosed: true);
   }
 }

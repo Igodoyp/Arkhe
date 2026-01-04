@@ -1,4 +1,5 @@
 // data/models/day_feedback_model.dart
+import '../../../../core/time/date_time_extensions.dart';
 
 // ============================================================================
 // MODELO: DAY FEEDBACK
@@ -42,7 +43,7 @@ class DayFeedbackModel extends DayFeedback {
   factory DayFeedbackModel.fromJson(Map<String, dynamic> json) {
     return DayFeedbackModel(
       sessionId: json['sessionId'] as String,
-      date: DateTime.parse(json['date'] as String),
+      date: DateTime.parse(json['date'] as String).stripped,
       difficulty: _parseDifficultyLevel(json['difficulty'] as String),
       energyLevel: json['energyLevel'] as int,
       struggledMissions: (json['struggledMissions'] as List<dynamic>)

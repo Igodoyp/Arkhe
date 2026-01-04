@@ -1,25 +1,26 @@
 // presentation/pages/bonfire_page.dart
 
 // ============================================================================
-// BONFIRE PAGE (HOGUERA)
+// BONFIRE PAGE (HOGUERA) - RITUAL VERSION
 // ============================================================================
-// Pantalla inspirada en Dark Souls donde el usuario descansa tras completar
-// el día y proporciona feedback sobre sus misiones.
+// Experiencia cinemática inspirada en Dark Souls donde el usuario descansa
+// tras completar el día y reflexiona sobre su jornada.
 //
-// FLUJO:
-// 1. Usuario llega después de "End Day"
-// 2. Se muestra resumen de misiones completadas
-// 3. Usuario proporciona feedback: dificultad, energía, misiones problemáticas
-// 4. Se guarda el feedback para adaptar misiones futuras
-// 5. Navegación de vuelta al inicio
+// FASES DEL RITUAL:
+// 1. Intro Cinemática - Fade in con título "DÍA COMPLETADO"
+// 2. Resumen Épico - Misiones completadas con animaciones
+// 3. Hoguera Animada - Fuego ardiendo con partículas
+// 4. Reflexión - Usuario escribe sus pensamientos
+// 5. Palabras de Morgana - AI analiza y ofrece sabiduría
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../domain/entities/day_feedback_entity.dart';
 import '../../domain/entities/mission_entity.dart';
-import '../../domain/usecases/day_feedback_usecase.dart';
+import '../../domain/entities/stat_type.dart';
 import '../controllers/bonfire_controller.dart';
 import '../controllers/day_session_controller.dart';
+import '../widgets/bonfire_animation.dart';
 
 class BonfirePage extends StatefulWidget {
   final String sessionId;
@@ -40,49 +41,105 @@ class BonfirePage extends StatefulWidget {
 }
 
 class _BonfirePageState extends State<BonfirePage>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _animationController;
+    with TickerProviderStateMixin {
+  // Fase del ritual (0 = intro cinemática, 1 = ritual principal)
+  int _phase = 0;
+
+  // Controladores de animación
+  late AnimationController _cinematicController;
+  late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
-  final TextEditingController _notesController = TextEditingController();
+  late Animation<double> _titleAnimation;
+  late Animation<double> _statsAnimation;
+
+  final TextEditingController _reflectionController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
 
-    // Animación de entrada
-    _animationController = AnimationController(
+    // Animación cinemática inicial (3 segundos)
+    _cinematicController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3000),
+    );
+
+    // Animación de fade general
+    _fadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     );
     _fadeAnimation = CurvedAnimation(
-      parent: _animationController,
+      parent: _fadeController,
       curve: Curves.easeInOut,
     );
 
-    // Inicializar el controller
+    // Animaciones escalonadas para intro cinemática
+    _titleAnimation = CurvedAnimation(
+      parent: _cinematicController,
+      curve: const Interval(0.0, 0.4, curve: Curves.easeOut),
+    );
+    _statsAnimation = CurvedAnimation(
+      parent: _cinematicController,
+      curve: const Interval(0.5, 1.0, curve: Curves.easeOut),
+    );
+
+    // Inicializar controller y comenzar intro
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final controller = context.read<BonfireController>();
       controller.initialize(
         sessionId: widget.sessionId,
         completedMissionIds: widget.completedMissions.map((m) => m.id).toList(),
       );
-      _animationController.forward();
+
+      // Comenzar animación cinemática
+      _cinematicController.forward().then((_) {
+        // Esperar 1 segundo y transicionar a fase principal
+        Future.delayed(const Duration(milliseconds: 1000), () {
+          if (mounted) {
+            setState(() => _phase = 1);
+            _fadeController.forward();
+          }
+        });
+      });
     });
   }
 
   @override
   void dispose() {
-    _animationController.dispose();
-    _notesController.dispose();
+    _cinematicController.dispose();
+    _fadeController.dispose();
+    _reflectionController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1a1a1a), // Fondo oscuro tipo Dark Souls
+      backgroundColor: Colors.black,
       body: Consumer<BonfireController>(
         builder: (context, controller, child) {
+          if (controller.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Error: ${controller.errorMessage ?? "Unknown error"}',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Volver'),
+                  ),
+                ],
+              ),
+            );
+          }
+
           if (!controller.isReady && !controller.isSaved) {
             return const Center(
               child: CircularProgressIndicator(color: Colors.orange),
@@ -93,429 +150,837 @@ class _BonfirePageState extends State<BonfirePage>
             return _buildSuccessScreen(context, controller);
           }
 
-          return _buildFeedbackForm(context, controller);
+          // Fase 0: Intro cinemática
+          if (_phase == 0) {
+            return _buildCinematicIntro(context);
+          }
+
+          // Fase 1: Ritual principal
+          return _buildRitualScreen(context, controller);
         },
       ),
     );
   }
 
-  Widget _buildFeedbackForm(BuildContext context, BonfireController controller) {
-    return FadeTransition(
-      opacity: _fadeAnimation,
-      child: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // ========== Header (Bonfire Icon + Título) ==========
-              _buildHeader(),
-              const SizedBox(height: 32),
+  // ========================================================================
+  // FASE 0: INTRO CINEMÁTICA
+  // ========================================================================
 
-              // ========== Resumen del Día ==========
-              _buildDaySummary(),
-              const SizedBox(height: 32),
-
-              // ========== Selector de Dificultad ==========
-              _buildDifficultySelector(controller),
-              const SizedBox(height: 24),
-
-              // ========== Selector de Energía ==========
-              _buildEnergySelector(controller),
-              const SizedBox(height: 24),
-
-              // ========== Misiones Difíciles/Fáciles ==========
-              _buildMissionFeedback(controller),
-              const SizedBox(height: 24),
-
-              // ========== Notas del Usuario ==========
-              _buildNotesField(controller),
-              const SizedBox(height: 32),
-
-              // ========== Análisis de Tendencias (si existe) ==========
-              if (controller.analysis != null) ...[
-                _buildAnalysisCard(controller.analysis!),
-                const SizedBox(height: 24),
+  Widget _buildCinematicIntro(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _cinematicController,
+      builder: (context, child) {
+        return Container(
+          decoration: const BoxDecoration(
+            gradient: RadialGradient(
+              center: Alignment.center,
+              radius: 1.5,
+              colors: [
+                Color(0xFF2a1a0a), // Marrón oscuro centro
+                Colors.black, // Negro bordes
               ],
-
-              // ========== Botón de Guardar ==========
-              _buildSaveButton(controller),
-              const SizedBox(height: 16),
-
-              // ========== Botón de Cancelar ==========
-              _buildCancelButton(),
-            ],
+            ),
           ),
-        ),
-      ),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Título "DÍA COMPLETADO"
+                FadeTransition(
+                  opacity: _titleAnimation,
+                  child: ScaleTransition(
+                    scale: Tween<double>(begin: 0.8, end: 1.0).animate(
+                      _titleAnimation,
+                    ),
+                    child: Column(
+                      children: [
+                        // Ornamento superior
+                        _buildOrnament(),
+                        const SizedBox(height: 24),
+
+                        // Título principal
+                        Text(
+                          'DÍA COMPLETADO',
+                          style: TextStyle(
+                            fontSize: 42,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange.shade300,
+                            letterSpacing: 4,
+                            shadows: const [
+                              Shadow(
+                                color: Colors.orange,
+                                blurRadius: 20,
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // Ornamento inferior
+                        _buildOrnament(),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 60),
+
+                // Estadísticas del día
+                FadeTransition(
+                  opacity: _statsAnimation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 0.3),
+                      end: Offset.zero,
+                    ).animate(_statsAnimation),
+                    child: Column(
+                      children: [
+                        // Misiones completadas
+                        _buildCinematicStat(
+                          'Misiones Completadas',
+                          '${widget.completedMissions.length}',
+                          Icons.check_circle,
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Stats ganadas
+                        _buildCinematicStat(
+                          'Stats Ganadas',
+                          '+${widget.totalStatsGained}',
+                          Icons.trending_up,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildHeader() {
-    return Column(
+  Widget _buildOrnament() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        // Icono de fuego (hoguera)
         Container(
-          width: 80,
-          height: 80,
+          width: 60,
+          height: 2,
           decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: RadialGradient(
+            gradient: LinearGradient(
               colors: [
+                Colors.transparent,
                 Colors.orange.shade300,
-                Colors.deepOrange.shade700,
               ],
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.orange.withOpacity(0.5),
-                blurRadius: 20,
-                spreadRadius: 5,
-              ),
-            ],
-          ),
-          child: const Icon(
-            Icons.local_fire_department,
-            size: 50,
-            color: Colors.white,
           ),
         ),
-        const SizedBox(height: 16),
-        const Text(
-          'BONFIRE',
-          style: TextStyle(
-            fontSize: 32,
-            fontWeight: FontWeight.bold,
-            color: Colors.orange,
-            letterSpacing: 4,
-          ),
+        const SizedBox(width: 12),
+        Icon(
+          Icons.local_fire_department,
+          color: Colors.orange.shade300,
+          size: 24,
         ),
-        const SizedBox(height: 8),
-        Text(
-          'Descansa y reflexiona sobre tu día',
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.grey.shade400,
-            fontStyle: FontStyle.italic,
+        const SizedBox(width: 12),
+        Container(
+          width: 60,
+          height: 2,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Colors.orange.shade300,
+                Colors.transparent,
+              ],
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildDaySummary() {
-    final hasCompletedMissions = widget.completedMissions.isNotEmpty;
-    
+  Widget _buildCinematicStat(String label, String value, IconData icon) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.orange.withOpacity(0.3)),
+        border: Border.all(
+          color: Colors.orange.shade900.withOpacity(0.3),
+          width: 1,
+        ),
+        borderRadius: BorderRadius.circular(8),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
-            'Resumen del Día',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.orange,
-            ),
+          Icon(
+            icon,
+            color: Colors.orange.shade300,
+            size: 28,
           ),
-          const SizedBox(height: 12),
-          _summaryRow(
-            Icons.check_circle,
-            'Misiones Completadas',
-            '${widget.completedMissions.length}',
-          ),
-          const SizedBox(height: 8),
-          _summaryRow(
-            Icons.trending_up,
-            'Stats Ganados',
-            hasCompletedMissions ? '+${widget.totalStatsGained}' : '0',
-          ),
-          if (!hasCompletedMissions) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade900.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue.withOpacity(0.3)),
+          const SizedBox(width: 16),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  color: Colors.orange.shade200,
+                  fontSize: 14,
+                  letterSpacing: 1,
+                ),
               ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline, size: 20, color: Colors.blue.shade300),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'No completaste misiones hoy. Tu feedback es igual de valioso.',
-                      style: TextStyle(
-                        color: Colors.blue.shade200,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _summaryRow(IconData icon, String label, String value) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: Colors.orange),
-        const SizedBox(width: 12),
-        Text(
-          label,
-          style: TextStyle(color: Colors.grey.shade300, fontSize: 14),
-        ),
-        const Spacer(),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
+  // ========================================================================
+  // FASE 1: RITUAL PRINCIPAL (HOGUERA + REFLEXIÓN)
+  // ========================================================================
+
+  Widget _buildRitualScreen(BuildContext context, BonfireController controller) {
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0, -0.3),
+            radius: 1.2,
+            colors: [
+              Color(0xFF3a1a0a), // Centro cálido
+              Color(0xFF1a1a1a), // Bordes oscuros
+              Colors.black,
+            ],
           ),
         ),
-      ],
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const SizedBox(height: 20),
+
+                // ========== HOGUERA ANIMADA ==========
+                const BonfireAnimation(
+                  size: 200,
+                  isActive: true,
+                ),
+                const SizedBox(height: 40),
+
+                // ========== TÍTULO DEL RITUAL ==========
+                Text(
+                  '⚔️ LA HOGUERA ⚔️',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.orange.shade300,
+                    letterSpacing: 3,
+                    shadows: const [
+                      Shadow(
+                        color: Colors.orange,
+                        blurRadius: 15,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Subtítulo épico
+                Text(
+                  'Descansa, viajero. Reflexiona sobre tu jornada.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.orange.shade200.withOpacity(0.7),
+                    fontStyle: FontStyle.italic,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(height: 40),
+
+                // ========== RESUMEN ÉPICO DE MISIONES ==========
+                _buildEpicMissionSummary(),
+                const SizedBox(height: 40),
+
+                // ========== SECCIÓN DE REFLEXIÓN ==========
+                _buildReflectionSection(controller),
+                const SizedBox(height: 32),
+
+                // ========== BOTONES DE ACCIÓN ==========
+                _buildActionButtons(controller),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEpicMissionSummary() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.orange.shade900.withOpacity(0.1),
+            Colors.orange.shade900.withOpacity(0.05),
+          ],
+        ),
+        border: Border.all(
+          color: Colors.orange.shade900.withOpacity(0.3),
+          width: 1,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Título de sección
+          Row(
+            children: [
+              Icon(
+                Icons.military_tech,
+                color: Colors.orange.shade300,
+                size: 24,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'LOGROS DEL DÍA',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.orange.shade300,
+                  letterSpacing: 2,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Lista de misiones completadas
+          if (widget.completedMissions.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Text(
+                  'No se completaron misiones hoy',
+                  style: TextStyle(
+                    color: Colors.orange.shade200.withOpacity(0.5),
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+            )
+          else
+            ...widget.completedMissions.asMap().entries.map((entry) {
+              final index = entry.key;
+              final mission = entry.value;
+              return _buildMissionCard(mission, index);
+            }),
+
+          const SizedBox(height: 16),
+
+          // Resumen de stats ganadas
+          Divider(color: Colors.orange.shade900.withOpacity(0.3)),
+          const SizedBox(height: 16),
+
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Total de Stats Ganadas',
+                style: TextStyle(
+                  color: Colors.orange.shade200,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade900.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '+${widget.totalStatsGained}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMissionCard(Mission mission, int index) {
+    // Determinar stat principal (la de mayor valor)
+    final statEntries = mission.statsReward.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    
+    final primaryStatName = statEntries.first.key;
+    final primaryStat = StatType.values.firstWhere(
+      (s) => s.name == primaryStatName,
+      orElse: () => StatType.strength,
+    );
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.3),
+        border: Border.all(
+          color: primaryStat.color.withOpacity(0.4),
+          width: 1,
+        ),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          // Número de misión
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: primaryStat.color.withOpacity(0.2),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: primaryStat.color,
+                width: 2,
+              ),
+            ),
+            child: Center(
+              child: Text(
+                '${index + 1}',
+                style: TextStyle(
+                  color: primaryStat.color,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+
+          // Título de misión
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  mission.title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(
+                      primaryStat.icon,
+                      color: primaryStat.color,
+                      size: 14,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '+${mission.statsReward.values.reduce((a, b) => a + b)} stats',
+                      style: TextStyle(
+                        color: Colors.orange.shade200.withOpacity(0.7),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Icono de completado
+          Icon(
+            Icons.check_circle,
+            color: Colors.green.shade400,
+            size: 28,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReflectionSection(BonfireController controller) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.purple.shade900.withOpacity(0.1),
+            Colors.purple.shade900.withOpacity(0.05),
+          ],
+        ),
+        border: Border.all(
+          color: Colors.purple.shade900.withOpacity(0.3),
+          width: 1,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Título de sección
+          Row(
+            children: [
+              Icon(
+                Icons.auto_stories,
+                color: Colors.purple.shade300,
+                size: 24,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'REFLEXIÓN DEL GUERRERO',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.purple.shade300,
+                  letterSpacing: 2,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Prompt de Morgana
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '"Dime, viajero... ¿Cómo ha sido tu batalla hoy? '
+              '¿Qué desafíos enfrentaste? ¿Qué aprendiste de tu jornada?"',
+              style: TextStyle(
+                color: Colors.purple.shade200,
+                fontSize: 14,
+                fontStyle: FontStyle.italic,
+                height: 1.5,
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Campo de reflexión
+          TextField(
+            controller: _reflectionController,
+            maxLines: 6,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              height: 1.6,
+            ),
+            decoration: InputDecoration(
+              hintText: 'Escribe tus reflexiones aquí...',
+              hintStyle: TextStyle(
+                color: Colors.white.withOpacity(0.3),
+                fontStyle: FontStyle.italic,
+              ),
+              filled: true,
+              fillColor: Colors.black.withOpacity(0.4),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(
+                  color: Colors.purple.shade900.withOpacity(0.5),
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(
+                  color: Colors.purple.shade900.withOpacity(0.5),
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(
+                  color: Colors.purple.shade300,
+                  width: 2,
+                ),
+              ),
+            ),
+            onChanged: (value) {
+              controller.updateNotes(value);
+            },
+          ),
+
+          const SizedBox(height: 16),
+
+          // Selector de dificultad
+          Text(
+            '¿Cómo fue la dificultad?',
+            style: TextStyle(
+              color: Colors.purple.shade200,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildDifficultySelector(controller),
+
+          const SizedBox(height: 20),
+
+          // Selector de energía
+          Text(
+            '¿Cómo está tu energía?',
+            style: TextStyle(
+              color: Colors.purple.shade200,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildEnergySelector(controller),
+        ],
+      ),
     );
   }
 
   Widget _buildDifficultySelector(BonfireController controller) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '¿Cómo fue la dificultad?',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        const SizedBox(height: 12),
-        ...DifficultyLevel.values.map((level) {
-          final isSelected = controller.selectedDifficulty == level;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: InkWell(
-              onTap: () => controller.setDifficulty(level),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? Colors.orange.withOpacity(0.2)
-                      : Colors.black.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: isSelected ? Colors.orange : Colors.grey.shade700,
-                    width: isSelected ? 2 : 1,
+    final difficulties = [
+      (DifficultyLevel.tooEasy, Icons.sentiment_very_satisfied, Colors.green),
+      (DifficultyLevel.justRight, Icons.sentiment_neutral, Colors.orange),
+      (DifficultyLevel.challenging, Icons.sentiment_dissatisfied, Colors.deepOrange),
+      (DifficultyLevel.tooHard, Icons.sentiment_very_dissatisfied, Colors.red),
+    ];
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: difficulties.map((diff) {
+        final (level, icon, color) = diff;
+        final isSelected = controller.overallDifficulty == level;
+
+        return InkWell(
+          onTap: () => controller.updateOverallDifficulty(level),
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? color.withOpacity(0.3)
+                  : Colors.black.withOpacity(0.3),
+              border: Border.all(
+                color: isSelected ? color : Colors.white.withOpacity(0.2),
+                width: isSelected ? 2 : 1,
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  color: isSelected ? color : Colors.white.withOpacity(0.5),
+                  size: 20,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  level.displayName,
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : Colors.white.withOpacity(0.7),
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                   ),
                 ),
-                child: Row(
-                  children: [
-                    Icon(
-                      isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-                      color: isSelected ? Colors.orange : Colors.grey,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            level.displayName,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: isSelected ? Colors.orange : Colors.white,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            level.description,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade400,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              ],
             ),
-          );
-        }),
-      ],
+          ),
+        );
+      }).toList(),
     );
   }
 
   Widget _buildEnergySelector(BonfireController controller) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '¿Cómo estuvo tu energía?',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: List.generate(5, (index) {
-            final level = index + 1;
-            final isSelected = controller.selectedEnergy == level;
-            return GestureDetector(
-              onTap: () => controller.setEnergy(level),
-              child: Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isSelected
-                      ? Colors.orange
-                      : Colors.black.withOpacity(0.3),
-                  border: Border.all(
-                    color: isSelected ? Colors.orange : Colors.grey.shade700,
-                    width: 2,
-                  ),
-                ),
-                child: Center(
-                  child: Text(
-                    '$level',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: isSelected ? Colors.white : Colors.grey.shade500,
-                    ),
-                  ),
-                ),
+    const energies = [
+      (1, 'Agotado', Icons.battery_0_bar, Colors.red),
+      (2, 'Bajo', Icons.battery_2_bar, Colors.orange),
+      (3, 'Normal', Icons.battery_4_bar, Colors.yellow),
+      (4, 'Bien', Icons.battery_6_bar, Colors.lightGreen),
+      (5, 'Lleno', Icons.battery_full, Colors.green),
+    ];
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: energies.map((energy) {
+        final (value, label, icon, color) = energy;
+        final isSelected = controller.energyLevel == value;
+
+        return InkWell(
+          onTap: () => controller.updateEnergyLevel(value),
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? color.withOpacity(0.3)
+                  : Colors.black.withOpacity(0.3),
+              border: Border.all(
+                color: isSelected ? color : Colors.white.withOpacity(0.2),
+                width: isSelected ? 2 : 1,
               ),
-            );
-          }),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Agotado', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-            Text('Lleno de energía', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-          ],
-        ),
-      ],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  color: isSelected ? color : Colors.white.withOpacity(0.5),
+                  size: 20,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : Colors.white.withOpacity(0.7),
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 
-  Widget _buildMissionFeedback(BonfireController controller) {
-    if (widget.completedMissions.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
+  Widget _buildActionButtons(BonfireController controller) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Marca las misiones según tu experiencia',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
+        // Botón principal: Guardar reflexión
+        SizedBox(
+          width: double.infinity,
+          height: 56,
+          child: ElevatedButton(
+            onPressed: controller.isSaving
+                ? null
+                : () async {
+                    await controller.saveFeedback();
+                    if (!mounted) return;
+
+                    if (controller.errorMessage != null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(controller.errorMessage!),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange.shade800,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 8,
+              shadowColor: Colors.orange.withOpacity(0.5),
+            ),
+            child: controller.isSaving
+                ? const SizedBox(
+                    height: 24,
+                    width: 24,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.save, size: 24),
+                      SizedBox(width: 12),
+                      Text(
+                        'GUARDAR REFLEXIÓN',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ],
+                  ),
           ),
         ),
-        const SizedBox(height: 12),
-        ...widget.completedMissions.map((mission) {
-          final isStruggled = controller.struggledMissions.contains(mission.id);
-          final isEasy = controller.easyMissions.contains(mission.id);
 
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.shade800),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      mission.title,
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
-                    ),
+        const SizedBox(height: 16),
+
+        // Botón secundario: Saltar (sin guardar)
+        TextButton(
+          onPressed: () {
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                backgroundColor: const Color(0xFF2a2a2a),
+                title: const Text(
+                  '¿Salir sin reflexionar?',
+                  style: TextStyle(color: Colors.white),
+                ),
+                content: Text(
+                  'Si sales ahora, no se guardará tu reflexión y Morgana no podrá ayudarte a mejorar.',
+                  style: TextStyle(color: Colors.white.withOpacity(0.8)),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancelar'),
                   ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.sentiment_dissatisfied,
-                      color: isStruggled ? Colors.red : Colors.grey.shade600,
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context); // Cerrar diálogo
+                      Navigator.pop(context); // Volver a missions
+                    },
+                    child: const Text(
+                      'Salir',
+                      style: TextStyle(color: Colors.red),
                     ),
-                    onPressed: () => controller.toggleStruggledMission(mission.id),
-                    tooltip: 'Fue difícil',
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.sentiment_satisfied,
-                      color: isEasy ? Colors.green : Colors.grey.shade600,
-                    ),
-                    onPressed: () => controller.toggleEasyMission(mission.id),
-                    tooltip: 'Fue fácil',
                   ),
                 ],
               ),
-            ),
-          );
-        }),
-      ],
-    );
-  }
-
-  Widget _buildNotesField(BonfireController controller) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Notas adicionales (opcional)',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _notesController,
-          onChanged: controller.setNotes,
-          maxLines: 4,
-          style: const TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            hintText: 'Ej: Tuve mucho trabajo hoy, me sentí motivado...',
-            hintStyle: TextStyle(color: Colors.grey.shade600),
-            filled: true,
-            fillColor: Colors.black.withOpacity(0.3),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey.shade700),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: Colors.grey.shade700),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: Colors.orange, width: 2),
+            );
+          },
+          child: Text(
+            'Salir sin guardar',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.5),
+              fontSize: 14,
             ),
           ),
         ),
@@ -523,169 +988,187 @@ class _BonfirePageState extends State<BonfirePage>
     );
   }
 
-  Widget _buildAnalysisCard(FeedbackAnalysis analysis) {
+  // ========================================================================
+  // PANTALLA DE ÉXITO (PALABRAS DE MORGANA)
+  // ========================================================================
+
+  Widget _buildSuccessScreen(
+      BuildContext context, BonfireController controller) {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.blue.shade900.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blue.withOpacity(0.3)),
+      decoration: const BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment.center,
+          radius: 1.5,
+          colors: [
+            Color(0xFF3a1a3a), // Púrpura oscuro centro
+            Colors.black,
+          ],
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.insights, color: Colors.blue, size: 20),
-              const SizedBox(width: 8),
-              const Text(
-                'Análisis de Tendencias',
+              // Icono de Morgana
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      Colors.purple.shade300.withOpacity(0.3),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+                child: Icon(
+                  Icons.psychology,
+                  size: 80,
+                  color: Colors.purple.shade300,
+                ),
+              ),
+              const SizedBox(height: 40),
+
+              // Título
+              Text(
+                'PALABRAS DE MORGANA',
+                textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: Colors.blue,
+                  color: Colors.purple.shade300,
+                  letterSpacing: 3,
+                  shadows: const [
+                    Shadow(
+                      color: Colors.purple,
+                      blurRadius: 15,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 40),
+
+              // Mensaje de Morgana (análisis de AI)
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.purple.shade900.withOpacity(0.2),
+                      Colors.purple.shade900.withOpacity(0.05),
+                    ],
+                  ),
+                  border: Border.all(
+                    color: Colors.purple.shade900.withOpacity(0.5),
+                    width: 1,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    if (controller.analysis != null) ...[
+                      Text(
+                        controller.analysis!.summary,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.purple.shade100,
+                          fontSize: 16,
+                          fontStyle: FontStyle.italic,
+                          height: 1.6,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Tendencias
+                      if (controller.analysis!.trends.isNotEmpty) ...[
+                        Divider(
+                          color: Colors.purple.shade900.withOpacity(0.3),
+                        ),
+                        const SizedBox(height: 16),
+                        ...controller.analysis!.trends.map((trend) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8.0),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.arrow_right,
+                                  color: Colors.purple.shade300,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    trend,
+                                    style: TextStyle(
+                                      color: Colors.purple.shade200,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
+                    ] else
+                      Text(
+                        '"Tu reflexión ha sido guardada, viajero. '
+                        'Que el fuego te guíe en tu próxima jornada."',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.purple.shade100,
+                          fontSize: 16,
+                          fontStyle: FontStyle.italic,
+                          height: 1.6,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 40),
+
+              // Botón para volver
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: () {
+                    // Volver a la pantalla de misiones
+                    Navigator.pop(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.purple.shade800,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 8,
+                    shadowColor: Colors.purple.withOpacity(0.5),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.home, size: 24),
+                      SizedBox(width: 12),
+                      Text(
+                        'VOLVER AL VIAJE',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            'Últimos ${analysis.daysAnalyzed} días analizados',
-            style: TextStyle(color: Colors.grey.shade300, fontSize: 12),
-          ),
-          const SizedBox(height: 8),
-          ...analysis.recommendations.map((rec) => Padding(
-                padding: const EdgeInsets.only(top: 4.0),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('• ', style: TextStyle(color: Colors.blue)),
-                    Expanded(
-                      child: Text(
-                        rec,
-                        style: TextStyle(color: Colors.grey.shade300, fontSize: 13),
-                      ),
-                    ),
-                  ],
-                ),
-              )),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSaveButton(BonfireController controller) {
-    return ElevatedButton(
-      onPressed: controller.isSaving ? null : () async {
-        final success = await controller.saveFeedback();
-        if (success && mounted) {
-          // El estado cambiará a "saved" y se mostrará _buildSuccessScreen
-        } else if (!success && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(controller.errorMessage ?? 'Error al guardar'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      },
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.orange,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
         ),
-      ),
-      child: controller.isSaving
-          ? const SizedBox(
-              height: 20,
-              width: 20,
-              child: CircularProgressIndicator(
-                color: Colors.white,
-                strokeWidth: 2,
-              ),
-            )
-          : const Text(
-              'GUARDAR Y CONTINUAR',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1,
-              ),
-            ),
-    );
-  }
-
-  Widget _buildCancelButton() {
-    return TextButton(
-      onPressed: () => Navigator.of(context).pop(),
-      child: Text(
-        'Saltar feedback',
-        style: TextStyle(color: Colors.grey.shade500),
-      ),
-    );
-  }
-
-  Widget _buildSuccessScreen(BuildContext context, BonfireController controller) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(
-            Icons.check_circle_outline,
-            size: 80,
-            color: Colors.green,
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'Feedback Guardado',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Tus misiones se adaptarán según tu experiencia',
-            style: TextStyle(color: Colors.grey.shade400),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 32),
-          ElevatedButton(
-            onPressed: () async {
-              // 1. Resetear el controller de Bonfire
-              controller.reset();
-              
-              // 2. Limpiar el resultado anterior del día
-              widget.daySessionController.clearLastResult();
-              
-              // 3. Crear una nueva sesión del día (para testing de múltiples días)
-              print('[BonfirePage] 🔄 Creando nueva sesión del día...');
-              await widget.daySessionController.loadCurrentSession();
-              
-              // 4. Volver al inicio
-              if (!mounted) return;
-              Navigator.of(context).popUntil((route) => route.isFirst);
-              
-              print('[BonfirePage] ✅ Nueva sesión creada - Listo para el próximo día!');
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-            ),
-            child: const Text('COMENZAR NUEVO DÍA'),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            '(Se creará una nueva sesión para testing)',
-            style: TextStyle(
-              color: Colors.grey.shade600,
-              fontSize: 12,
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-        ],
       ),
     );
   }

@@ -175,6 +175,10 @@ class FeedbackAnalysis {
   final double suggestedDifficultyMultiplier;
   final List<String> recommendations;
 
+  // Getters for BonfirePage compatibility
+  String get summary => 'Análisis de $daysAnalyzed días. Energía promedio: ${averageEnergy.toStringAsFixed(1)}';
+  List<String> get trends => recommendations;
+
   FeedbackAnalysis({
     required this.daysAnalyzed,
     required this.averageEnergy,

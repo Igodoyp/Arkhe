@@ -8,6 +8,15 @@ class Missions extends Table {
   TextColumn get type => text()();
   IntColumn get xpReward => integer()();
   BoolColumn get isCompleted => boolean().withDefault(const Constant(false))();
+  
+  // CRITICAL: Fecha para la cual está programada la misión (DEBE estar stripped)
+  // Esta es la fecha clave para queries: getMissionsByDate(dateStripped)
+  DateTimeColumn get scheduledFor => dateTime()();
+  
+  // FK lógica para agrupar misiones por sesión
+  // Permite queries como: "todas las misiones de esta sesión"
+  TextColumn get sessionId => text().nullable()();
+  
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().nullable()();
   
@@ -30,7 +39,7 @@ class DaySessions extends Table {
   TextColumn get id => text()();
   DateTimeColumn get date => dateTime()();
   TextColumn get completedMissionIds => text().withDefault(const Constant('[]'))();
-  BoolColumn get isFinalized => boolean().withDefault(const Constant(false))();
+  BoolColumn get isClosed => boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get finalizedAt => dateTime().nullable()();
   

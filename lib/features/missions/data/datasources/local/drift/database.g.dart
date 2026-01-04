@@ -77,6 +77,28 @@ class $MissionsTable extends Missions
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _scheduledForMeta = const VerificationMeta(
+    'scheduledFor',
+  );
+  @override
+  late final GeneratedColumn<DateTime> scheduledFor = GeneratedColumn<DateTime>(
+    'scheduled_for',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sessionIdMeta = const VerificationMeta(
+    'sessionId',
+  );
+  @override
+  late final GeneratedColumn<String> sessionId = GeneratedColumn<String>(
+    'session_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -108,6 +130,8 @@ class $MissionsTable extends Missions
     type,
     xpReward,
     isCompleted,
+    scheduledFor,
+    sessionId,
     createdAt,
     updatedAt,
   ];
@@ -172,6 +196,23 @@ class $MissionsTable extends Missions
         ),
       );
     }
+    if (data.containsKey('scheduled_for')) {
+      context.handle(
+        _scheduledForMeta,
+        scheduledFor.isAcceptableOrUnknown(
+          data['scheduled_for']!,
+          _scheduledForMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_scheduledForMeta);
+    }
+    if (data.containsKey('session_id')) {
+      context.handle(
+        _sessionIdMeta,
+        sessionId.isAcceptableOrUnknown(data['session_id']!, _sessionIdMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -217,6 +258,14 @@ class $MissionsTable extends Missions
         DriftSqlType.bool,
         data['${effectivePrefix}is_completed'],
       )!,
+      scheduledFor: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}scheduled_for'],
+      )!,
+      sessionId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}session_id'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -241,6 +290,8 @@ class MissionData extends DataClass implements Insertable<MissionData> {
   final String type;
   final int xpReward;
   final bool isCompleted;
+  final DateTime scheduledFor;
+  final String? sessionId;
   final DateTime createdAt;
   final DateTime? updatedAt;
   const MissionData({
@@ -250,6 +301,8 @@ class MissionData extends DataClass implements Insertable<MissionData> {
     required this.type,
     required this.xpReward,
     required this.isCompleted,
+    required this.scheduledFor,
+    this.sessionId,
     required this.createdAt,
     this.updatedAt,
   });
@@ -262,6 +315,10 @@ class MissionData extends DataClass implements Insertable<MissionData> {
     map['type'] = Variable<String>(type);
     map['xp_reward'] = Variable<int>(xpReward);
     map['is_completed'] = Variable<bool>(isCompleted);
+    map['scheduled_for'] = Variable<DateTime>(scheduledFor);
+    if (!nullToAbsent || sessionId != null) {
+      map['session_id'] = Variable<String>(sessionId);
+    }
     map['created_at'] = Variable<DateTime>(createdAt);
     if (!nullToAbsent || updatedAt != null) {
       map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -277,6 +334,10 @@ class MissionData extends DataClass implements Insertable<MissionData> {
       type: Value(type),
       xpReward: Value(xpReward),
       isCompleted: Value(isCompleted),
+      scheduledFor: Value(scheduledFor),
+      sessionId: sessionId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sessionId),
       createdAt: Value(createdAt),
       updatedAt: updatedAt == null && nullToAbsent
           ? const Value.absent()
@@ -296,6 +357,8 @@ class MissionData extends DataClass implements Insertable<MissionData> {
       type: serializer.fromJson<String>(json['type']),
       xpReward: serializer.fromJson<int>(json['xpReward']),
       isCompleted: serializer.fromJson<bool>(json['isCompleted']),
+      scheduledFor: serializer.fromJson<DateTime>(json['scheduledFor']),
+      sessionId: serializer.fromJson<String?>(json['sessionId']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime?>(json['updatedAt']),
     );
@@ -310,6 +373,8 @@ class MissionData extends DataClass implements Insertable<MissionData> {
       'type': serializer.toJson<String>(type),
       'xpReward': serializer.toJson<int>(xpReward),
       'isCompleted': serializer.toJson<bool>(isCompleted),
+      'scheduledFor': serializer.toJson<DateTime>(scheduledFor),
+      'sessionId': serializer.toJson<String?>(sessionId),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime?>(updatedAt),
     };
@@ -322,6 +387,8 @@ class MissionData extends DataClass implements Insertable<MissionData> {
     String? type,
     int? xpReward,
     bool? isCompleted,
+    DateTime? scheduledFor,
+    Value<String?> sessionId = const Value.absent(),
     DateTime? createdAt,
     Value<DateTime?> updatedAt = const Value.absent(),
   }) => MissionData(
@@ -331,6 +398,8 @@ class MissionData extends DataClass implements Insertable<MissionData> {
     type: type ?? this.type,
     xpReward: xpReward ?? this.xpReward,
     isCompleted: isCompleted ?? this.isCompleted,
+    scheduledFor: scheduledFor ?? this.scheduledFor,
+    sessionId: sessionId.present ? sessionId.value : this.sessionId,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt.present ? updatedAt.value : this.updatedAt,
   );
@@ -346,6 +415,10 @@ class MissionData extends DataClass implements Insertable<MissionData> {
       isCompleted: data.isCompleted.present
           ? data.isCompleted.value
           : this.isCompleted,
+      scheduledFor: data.scheduledFor.present
+          ? data.scheduledFor.value
+          : this.scheduledFor,
+      sessionId: data.sessionId.present ? data.sessionId.value : this.sessionId,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -360,6 +433,8 @@ class MissionData extends DataClass implements Insertable<MissionData> {
           ..write('type: $type, ')
           ..write('xpReward: $xpReward, ')
           ..write('isCompleted: $isCompleted, ')
+          ..write('scheduledFor: $scheduledFor, ')
+          ..write('sessionId: $sessionId, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -374,6 +449,8 @@ class MissionData extends DataClass implements Insertable<MissionData> {
     type,
     xpReward,
     isCompleted,
+    scheduledFor,
+    sessionId,
     createdAt,
     updatedAt,
   );
@@ -387,6 +464,8 @@ class MissionData extends DataClass implements Insertable<MissionData> {
           other.type == this.type &&
           other.xpReward == this.xpReward &&
           other.isCompleted == this.isCompleted &&
+          other.scheduledFor == this.scheduledFor &&
+          other.sessionId == this.sessionId &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -398,6 +477,8 @@ class MissionsCompanion extends UpdateCompanion<MissionData> {
   final Value<String> type;
   final Value<int> xpReward;
   final Value<bool> isCompleted;
+  final Value<DateTime> scheduledFor;
+  final Value<String?> sessionId;
   final Value<DateTime> createdAt;
   final Value<DateTime?> updatedAt;
   final Value<int> rowid;
@@ -408,6 +489,8 @@ class MissionsCompanion extends UpdateCompanion<MissionData> {
     this.type = const Value.absent(),
     this.xpReward = const Value.absent(),
     this.isCompleted = const Value.absent(),
+    this.scheduledFor = const Value.absent(),
+    this.sessionId = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -419,6 +502,8 @@ class MissionsCompanion extends UpdateCompanion<MissionData> {
     required String type,
     required int xpReward,
     this.isCompleted = const Value.absent(),
+    required DateTime scheduledFor,
+    this.sessionId = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -426,7 +511,8 @@ class MissionsCompanion extends UpdateCompanion<MissionData> {
        title = Value(title),
        description = Value(description),
        type = Value(type),
-       xpReward = Value(xpReward);
+       xpReward = Value(xpReward),
+       scheduledFor = Value(scheduledFor);
   static Insertable<MissionData> custom({
     Expression<String>? id,
     Expression<String>? title,
@@ -434,6 +520,8 @@ class MissionsCompanion extends UpdateCompanion<MissionData> {
     Expression<String>? type,
     Expression<int>? xpReward,
     Expression<bool>? isCompleted,
+    Expression<DateTime>? scheduledFor,
+    Expression<String>? sessionId,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -445,6 +533,8 @@ class MissionsCompanion extends UpdateCompanion<MissionData> {
       if (type != null) 'type': type,
       if (xpReward != null) 'xp_reward': xpReward,
       if (isCompleted != null) 'is_completed': isCompleted,
+      if (scheduledFor != null) 'scheduled_for': scheduledFor,
+      if (sessionId != null) 'session_id': sessionId,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -458,6 +548,8 @@ class MissionsCompanion extends UpdateCompanion<MissionData> {
     Value<String>? type,
     Value<int>? xpReward,
     Value<bool>? isCompleted,
+    Value<DateTime>? scheduledFor,
+    Value<String?>? sessionId,
     Value<DateTime>? createdAt,
     Value<DateTime?>? updatedAt,
     Value<int>? rowid,
@@ -469,6 +561,8 @@ class MissionsCompanion extends UpdateCompanion<MissionData> {
       type: type ?? this.type,
       xpReward: xpReward ?? this.xpReward,
       isCompleted: isCompleted ?? this.isCompleted,
+      scheduledFor: scheduledFor ?? this.scheduledFor,
+      sessionId: sessionId ?? this.sessionId,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -496,6 +590,12 @@ class MissionsCompanion extends UpdateCompanion<MissionData> {
     if (isCompleted.present) {
       map['is_completed'] = Variable<bool>(isCompleted.value);
     }
+    if (scheduledFor.present) {
+      map['scheduled_for'] = Variable<DateTime>(scheduledFor.value);
+    }
+    if (sessionId.present) {
+      map['session_id'] = Variable<String>(sessionId.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -517,6 +617,8 @@ class MissionsCompanion extends UpdateCompanion<MissionData> {
           ..write('type: $type, ')
           ..write('xpReward: $xpReward, ')
           ..write('isCompleted: $isCompleted, ')
+          ..write('scheduledFor: $scheduledFor, ')
+          ..write('sessionId: $sessionId, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -828,18 +930,18 @@ class $DaySessionsTable extends DaySessions
         requiredDuringInsert: false,
         defaultValue: const Constant('[]'),
       );
-  static const VerificationMeta _isFinalizedMeta = const VerificationMeta(
-    'isFinalized',
+  static const VerificationMeta _isClosedMeta = const VerificationMeta(
+    'isClosed',
   );
   @override
-  late final GeneratedColumn<bool> isFinalized = GeneratedColumn<bool>(
-    'is_finalized',
+  late final GeneratedColumn<bool> isClosed = GeneratedColumn<bool>(
+    'is_closed',
     aliasedName,
     false,
     type: DriftSqlType.bool,
     requiredDuringInsert: false,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("is_finalized" IN (0, 1))',
+      'CHECK ("is_closed" IN (0, 1))',
     ),
     defaultValue: const Constant(false),
   );
@@ -871,7 +973,7 @@ class $DaySessionsTable extends DaySessions
     id,
     date,
     completedMissionIds,
-    isFinalized,
+    isClosed,
     createdAt,
     finalizedAt,
   ];
@@ -909,13 +1011,10 @@ class $DaySessionsTable extends DaySessions
         ),
       );
     }
-    if (data.containsKey('is_finalized')) {
+    if (data.containsKey('is_closed')) {
       context.handle(
-        _isFinalizedMeta,
-        isFinalized.isAcceptableOrUnknown(
-          data['is_finalized']!,
-          _isFinalizedMeta,
-        ),
+        _isClosedMeta,
+        isClosed.isAcceptableOrUnknown(data['is_closed']!, _isClosedMeta),
       );
     }
     if (data.containsKey('created_at')) {
@@ -954,9 +1053,9 @@ class $DaySessionsTable extends DaySessions
         DriftSqlType.string,
         data['${effectivePrefix}completed_mission_ids'],
       )!,
-      isFinalized: attachedDatabase.typeMapping.read(
+      isClosed: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
-        data['${effectivePrefix}is_finalized'],
+        data['${effectivePrefix}is_closed'],
       )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
@@ -979,14 +1078,14 @@ class DaySessionData extends DataClass implements Insertable<DaySessionData> {
   final String id;
   final DateTime date;
   final String completedMissionIds;
-  final bool isFinalized;
+  final bool isClosed;
   final DateTime createdAt;
   final DateTime? finalizedAt;
   const DaySessionData({
     required this.id,
     required this.date,
     required this.completedMissionIds,
-    required this.isFinalized,
+    required this.isClosed,
     required this.createdAt,
     this.finalizedAt,
   });
@@ -996,7 +1095,7 @@ class DaySessionData extends DataClass implements Insertable<DaySessionData> {
     map['id'] = Variable<String>(id);
     map['date'] = Variable<DateTime>(date);
     map['completed_mission_ids'] = Variable<String>(completedMissionIds);
-    map['is_finalized'] = Variable<bool>(isFinalized);
+    map['is_closed'] = Variable<bool>(isClosed);
     map['created_at'] = Variable<DateTime>(createdAt);
     if (!nullToAbsent || finalizedAt != null) {
       map['finalized_at'] = Variable<DateTime>(finalizedAt);
@@ -1009,7 +1108,7 @@ class DaySessionData extends DataClass implements Insertable<DaySessionData> {
       id: Value(id),
       date: Value(date),
       completedMissionIds: Value(completedMissionIds),
-      isFinalized: Value(isFinalized),
+      isClosed: Value(isClosed),
       createdAt: Value(createdAt),
       finalizedAt: finalizedAt == null && nullToAbsent
           ? const Value.absent()
@@ -1028,7 +1127,7 @@ class DaySessionData extends DataClass implements Insertable<DaySessionData> {
       completedMissionIds: serializer.fromJson<String>(
         json['completedMissionIds'],
       ),
-      isFinalized: serializer.fromJson<bool>(json['isFinalized']),
+      isClosed: serializer.fromJson<bool>(json['isClosed']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       finalizedAt: serializer.fromJson<DateTime?>(json['finalizedAt']),
     );
@@ -1040,7 +1139,7 @@ class DaySessionData extends DataClass implements Insertable<DaySessionData> {
       'id': serializer.toJson<String>(id),
       'date': serializer.toJson<DateTime>(date),
       'completedMissionIds': serializer.toJson<String>(completedMissionIds),
-      'isFinalized': serializer.toJson<bool>(isFinalized),
+      'isClosed': serializer.toJson<bool>(isClosed),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'finalizedAt': serializer.toJson<DateTime?>(finalizedAt),
     };
@@ -1050,14 +1149,14 @@ class DaySessionData extends DataClass implements Insertable<DaySessionData> {
     String? id,
     DateTime? date,
     String? completedMissionIds,
-    bool? isFinalized,
+    bool? isClosed,
     DateTime? createdAt,
     Value<DateTime?> finalizedAt = const Value.absent(),
   }) => DaySessionData(
     id: id ?? this.id,
     date: date ?? this.date,
     completedMissionIds: completedMissionIds ?? this.completedMissionIds,
-    isFinalized: isFinalized ?? this.isFinalized,
+    isClosed: isClosed ?? this.isClosed,
     createdAt: createdAt ?? this.createdAt,
     finalizedAt: finalizedAt.present ? finalizedAt.value : this.finalizedAt,
   );
@@ -1068,9 +1167,7 @@ class DaySessionData extends DataClass implements Insertable<DaySessionData> {
       completedMissionIds: data.completedMissionIds.present
           ? data.completedMissionIds.value
           : this.completedMissionIds,
-      isFinalized: data.isFinalized.present
-          ? data.isFinalized.value
-          : this.isFinalized,
+      isClosed: data.isClosed.present ? data.isClosed.value : this.isClosed,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       finalizedAt: data.finalizedAt.present
           ? data.finalizedAt.value
@@ -1084,7 +1181,7 @@ class DaySessionData extends DataClass implements Insertable<DaySessionData> {
           ..write('id: $id, ')
           ..write('date: $date, ')
           ..write('completedMissionIds: $completedMissionIds, ')
-          ..write('isFinalized: $isFinalized, ')
+          ..write('isClosed: $isClosed, ')
           ..write('createdAt: $createdAt, ')
           ..write('finalizedAt: $finalizedAt')
           ..write(')'))
@@ -1096,7 +1193,7 @@ class DaySessionData extends DataClass implements Insertable<DaySessionData> {
     id,
     date,
     completedMissionIds,
-    isFinalized,
+    isClosed,
     createdAt,
     finalizedAt,
   );
@@ -1107,7 +1204,7 @@ class DaySessionData extends DataClass implements Insertable<DaySessionData> {
           other.id == this.id &&
           other.date == this.date &&
           other.completedMissionIds == this.completedMissionIds &&
-          other.isFinalized == this.isFinalized &&
+          other.isClosed == this.isClosed &&
           other.createdAt == this.createdAt &&
           other.finalizedAt == this.finalizedAt);
 }
@@ -1116,7 +1213,7 @@ class DaySessionsCompanion extends UpdateCompanion<DaySessionData> {
   final Value<String> id;
   final Value<DateTime> date;
   final Value<String> completedMissionIds;
-  final Value<bool> isFinalized;
+  final Value<bool> isClosed;
   final Value<DateTime> createdAt;
   final Value<DateTime?> finalizedAt;
   final Value<int> rowid;
@@ -1124,7 +1221,7 @@ class DaySessionsCompanion extends UpdateCompanion<DaySessionData> {
     this.id = const Value.absent(),
     this.date = const Value.absent(),
     this.completedMissionIds = const Value.absent(),
-    this.isFinalized = const Value.absent(),
+    this.isClosed = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.finalizedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -1133,7 +1230,7 @@ class DaySessionsCompanion extends UpdateCompanion<DaySessionData> {
     required String id,
     required DateTime date,
     this.completedMissionIds = const Value.absent(),
-    this.isFinalized = const Value.absent(),
+    this.isClosed = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.finalizedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -1143,7 +1240,7 @@ class DaySessionsCompanion extends UpdateCompanion<DaySessionData> {
     Expression<String>? id,
     Expression<DateTime>? date,
     Expression<String>? completedMissionIds,
-    Expression<bool>? isFinalized,
+    Expression<bool>? isClosed,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? finalizedAt,
     Expression<int>? rowid,
@@ -1153,7 +1250,7 @@ class DaySessionsCompanion extends UpdateCompanion<DaySessionData> {
       if (date != null) 'date': date,
       if (completedMissionIds != null)
         'completed_mission_ids': completedMissionIds,
-      if (isFinalized != null) 'is_finalized': isFinalized,
+      if (isClosed != null) 'is_closed': isClosed,
       if (createdAt != null) 'created_at': createdAt,
       if (finalizedAt != null) 'finalized_at': finalizedAt,
       if (rowid != null) 'rowid': rowid,
@@ -1164,7 +1261,7 @@ class DaySessionsCompanion extends UpdateCompanion<DaySessionData> {
     Value<String>? id,
     Value<DateTime>? date,
     Value<String>? completedMissionIds,
-    Value<bool>? isFinalized,
+    Value<bool>? isClosed,
     Value<DateTime>? createdAt,
     Value<DateTime?>? finalizedAt,
     Value<int>? rowid,
@@ -1173,7 +1270,7 @@ class DaySessionsCompanion extends UpdateCompanion<DaySessionData> {
       id: id ?? this.id,
       date: date ?? this.date,
       completedMissionIds: completedMissionIds ?? this.completedMissionIds,
-      isFinalized: isFinalized ?? this.isFinalized,
+      isClosed: isClosed ?? this.isClosed,
       createdAt: createdAt ?? this.createdAt,
       finalizedAt: finalizedAt ?? this.finalizedAt,
       rowid: rowid ?? this.rowid,
@@ -1194,8 +1291,8 @@ class DaySessionsCompanion extends UpdateCompanion<DaySessionData> {
         completedMissionIds.value,
       );
     }
-    if (isFinalized.present) {
-      map['is_finalized'] = Variable<bool>(isFinalized.value);
+    if (isClosed.present) {
+      map['is_closed'] = Variable<bool>(isClosed.value);
     }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
@@ -1215,7 +1312,7 @@ class DaySessionsCompanion extends UpdateCompanion<DaySessionData> {
           ..write('id: $id, ')
           ..write('date: $date, ')
           ..write('completedMissionIds: $completedMissionIds, ')
-          ..write('isFinalized: $isFinalized, ')
+          ..write('isClosed: $isClosed, ')
           ..write('createdAt: $createdAt, ')
           ..write('finalizedAt: $finalizedAt, ')
           ..write('rowid: $rowid')
@@ -1761,6 +1858,8 @@ typedef $$MissionsTableCreateCompanionBuilder =
       required String type,
       required int xpReward,
       Value<bool> isCompleted,
+      required DateTime scheduledFor,
+      Value<String?> sessionId,
       Value<DateTime> createdAt,
       Value<DateTime?> updatedAt,
       Value<int> rowid,
@@ -1773,6 +1872,8 @@ typedef $$MissionsTableUpdateCompanionBuilder =
       Value<String> type,
       Value<int> xpReward,
       Value<bool> isCompleted,
+      Value<DateTime> scheduledFor,
+      Value<String?> sessionId,
       Value<DateTime> createdAt,
       Value<DateTime?> updatedAt,
       Value<int> rowid,
@@ -1814,6 +1915,16 @@ class $$MissionsTableFilterComposer
 
   ColumnFilters<bool> get isCompleted => $composableBuilder(
     column: $table.isCompleted,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get scheduledFor => $composableBuilder(
+    column: $table.scheduledFor,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sessionId => $composableBuilder(
+    column: $table.sessionId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1867,6 +1978,16 @@ class $$MissionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get scheduledFor => $composableBuilder(
+    column: $table.scheduledFor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sessionId => $composableBuilder(
+    column: $table.sessionId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -1908,6 +2029,14 @@ class $$MissionsTableAnnotationComposer
     column: $table.isCompleted,
     builder: (column) => column,
   );
+
+  GeneratedColumn<DateTime> get scheduledFor => $composableBuilder(
+    column: $table.scheduledFor,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sessionId =>
+      $composableBuilder(column: $table.sessionId, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -1953,6 +2082,8 @@ class $$MissionsTableTableManager
                 Value<String> type = const Value.absent(),
                 Value<int> xpReward = const Value.absent(),
                 Value<bool> isCompleted = const Value.absent(),
+                Value<DateTime> scheduledFor = const Value.absent(),
+                Value<String?> sessionId = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime?> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -1963,6 +2094,8 @@ class $$MissionsTableTableManager
                 type: type,
                 xpReward: xpReward,
                 isCompleted: isCompleted,
+                scheduledFor: scheduledFor,
+                sessionId: sessionId,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -1975,6 +2108,8 @@ class $$MissionsTableTableManager
                 required String type,
                 required int xpReward,
                 Value<bool> isCompleted = const Value.absent(),
+                required DateTime scheduledFor,
+                Value<String?> sessionId = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime?> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -1985,6 +2120,8 @@ class $$MissionsTableTableManager
                 type: type,
                 xpReward: xpReward,
                 isCompleted: isCompleted,
+                scheduledFor: scheduledFor,
+                sessionId: sessionId,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -2180,7 +2317,7 @@ typedef $$DaySessionsTableCreateCompanionBuilder =
       required String id,
       required DateTime date,
       Value<String> completedMissionIds,
-      Value<bool> isFinalized,
+      Value<bool> isClosed,
       Value<DateTime> createdAt,
       Value<DateTime?> finalizedAt,
       Value<int> rowid,
@@ -2190,7 +2327,7 @@ typedef $$DaySessionsTableUpdateCompanionBuilder =
       Value<String> id,
       Value<DateTime> date,
       Value<String> completedMissionIds,
-      Value<bool> isFinalized,
+      Value<bool> isClosed,
       Value<DateTime> createdAt,
       Value<DateTime?> finalizedAt,
       Value<int> rowid,
@@ -2246,8 +2383,8 @@ class $$DaySessionsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<bool> get isFinalized => $composableBuilder(
-    column: $table.isFinalized,
+  ColumnFilters<bool> get isClosed => $composableBuilder(
+    column: $table.isClosed,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2311,8 +2448,8 @@ class $$DaySessionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<bool> get isFinalized => $composableBuilder(
-    column: $table.isFinalized,
+  ColumnOrderings<bool> get isClosed => $composableBuilder(
+    column: $table.isClosed,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -2347,10 +2484,8 @@ class $$DaySessionsTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<bool> get isFinalized => $composableBuilder(
-    column: $table.isFinalized,
-    builder: (column) => column,
-  );
+  GeneratedColumn<bool> get isClosed =>
+      $composableBuilder(column: $table.isClosed, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -2417,7 +2552,7 @@ class $$DaySessionsTableTableManager
                 Value<String> id = const Value.absent(),
                 Value<DateTime> date = const Value.absent(),
                 Value<String> completedMissionIds = const Value.absent(),
-                Value<bool> isFinalized = const Value.absent(),
+                Value<bool> isClosed = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime?> finalizedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -2425,7 +2560,7 @@ class $$DaySessionsTableTableManager
                 id: id,
                 date: date,
                 completedMissionIds: completedMissionIds,
-                isFinalized: isFinalized,
+                isClosed: isClosed,
                 createdAt: createdAt,
                 finalizedAt: finalizedAt,
                 rowid: rowid,
@@ -2435,7 +2570,7 @@ class $$DaySessionsTableTableManager
                 required String id,
                 required DateTime date,
                 Value<String> completedMissionIds = const Value.absent(),
-                Value<bool> isFinalized = const Value.absent(),
+                Value<bool> isClosed = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime?> finalizedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -2443,7 +2578,7 @@ class $$DaySessionsTableTableManager
                 id: id,
                 date: date,
                 completedMissionIds: completedMissionIds,
-                isFinalized: isFinalized,
+                isClosed: isClosed,
                 createdAt: createdAt,
                 finalizedAt: finalizedAt,
                 rowid: rowid,

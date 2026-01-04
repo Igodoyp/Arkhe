@@ -1,9 +1,6 @@
-import 'dart:io';
 import 'package:drift/drift.dart';
-import 'package:drift/native.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
 import 'tables.dart';
+import 'connection/connection.dart' as impl;
 
 part 'database.g.dart';
 
@@ -19,7 +16,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
   
   // Constructor para testing
-  AppDatabase.forTesting(QueryExecutor e) : super(e);
+  AppDatabase.forTesting(super.e);
 
   @override
   int get schemaVersion => 1;
@@ -63,15 +60,8 @@ class AppDatabase extends _$AppDatabase {
   }
 }
 
-LazyDatabase _openConnection() {
-  return LazyDatabase(() async {
-    final dbFolder = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dbFolder.path, 'd0_database.sqlite'));
-    
-    print('[AppDatabase] 📂 Database path: ${file.path}');
-    
-    return NativeDatabase.createInBackground(file);
-  });
+QueryExecutor _openConnection() {
+  return impl.connect();
 }
 
 class DatabaseProvider {

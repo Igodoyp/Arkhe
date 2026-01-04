@@ -17,6 +17,9 @@ class Mission {
     this.isCompleted = false,
   });
 
+  // Getter para compatibilidad con BonfirePage
+  Map<String, int> get statsReward => { type.name: xpReward };
+
   Mission copyWith({
     String? id,
     String? title,

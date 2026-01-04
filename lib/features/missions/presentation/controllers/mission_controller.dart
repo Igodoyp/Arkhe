@@ -1,109 +1,197 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../domain/entities/mission_entity.dart';
+import '../../domain/usecases/ensure_missions_for_date_usecase.dart';
+import '../../domain/usecases/watch_missions_for_date_usecase.dart';
 import '../../domain/repositories/mission_repository.dart';
+import '../../../../core/time/time_provider.dart';
 import 'day_session_controller.dart';
 
 // ============================================================================
-// CONTROLADOR DE MISIONES
+// CONTROLADOR DE MISIONES (Refactorizado con UseCases + Streams)
 // ============================================================================
 // Este controller gestiona el ESTADO y las ACCIONES relacionadas con
-// la lista de misiones diarias.
+// la lista de misiones diarias usando el patrón UseCase formal.
 //
-// Responsabilidades:
-// - Cargar la lista de misiones del día
-// - Gestionar el estado de cada misión (completada/pendiente)
-// - Coordinar con DaySessionController para actualizar la sesión
+// ARQUITECTURA:
+// - EnsureMissionsForDateUseCase: Garantiza que existan misiones (LAZY)
+// - WatchMissionsForDateUseCase: Stream reactivo de cambios en Drift
+// - MissionRepository: Para operaciones de actualización
+// - TimeProvider: Para obtener fechas stripped (abstracción testeable)
 //
-// IMPORTANTE: Este controller NO actualiza las stats del usuario directamente.
-// Solo marca las misiones y las agrega a la sesión del día.
+// FLUJO REACTIVO:
+// 1. loadMissions() garantiza que existan misiones (LAZY ensure)
+// 2. Suscribe al stream de Drift que observa cambios en la tabla missions
+// 3. Cuando hay cambios (insert/update/delete) → stream emite nueva lista
+// 4. UI se actualiza automáticamente sin refresh manual
+//
+// ESTADOS:
+// - isLoading: true hasta que el stream emite la primera vez
+// - isGenerating: true cuando se está generando nuevas misiones
+// - errorMessage: null si todo ok, String con error si falla
 class MissionController extends ChangeNotifier {
   // ========== Estado (Variables que la UI observa) ==========
-  List<Mission> missions = [];  // La lista de misiones del día
-  bool isLoading = false;       // true mientras carga las misiones
+  List<Mission> missions = [];       // La lista de misiones del día
+  bool isLoading = false;            // true hasta que el stream emite la primera vez
+  bool isGenerating = false;         // true mientras genera nuevas misiones
+  String? errorMessage;              // null si ok, String si hay error
+  
+  StreamSubscription<List<Mission>>? _missionsSubscription;
 
   // ========== Dependencias ==========
-  final MissionRepository repository;               // Para obtener/actualizar misiones
-  final DaySessionController? daySessionController; // Para actualizar la sesión del día
+  final EnsureMissionsForDateUseCase ensureMissionsUseCase;
+  final WatchMissionsForDateUseCase watchMissionsUseCase;
+  final MissionRepository missionRepository;
+  final TimeProvider timeProvider;
+  final DaySessionController? daySessionController;
 
   MissionController({
-    required this.repository,
+    required this.ensureMissionsUseCase,
+    required this.watchMissionsUseCase,
+    required this.missionRepository,
+    required this.timeProvider,
     this.daySessionController,
   });
 
-  // ========== ACCIÓN 1: Cargar Misiones del Día ==========
+  // ========== ACCIÓN 1: Cargar Misiones del Día (LAZY + Stream) ==========
   // Se llama al iniciar la app (en initState de MissionsPage).
-  // Obtiene la lista de misiones diarias del repositorio.
+  // 
+  // FLUJO:
+  // 1. Garantiza que existan misiones (LAZY ensure)
+  // 2. Suscribe al stream de Drift para observar cambios
+  // 3. El stream emite automáticamente cuando hay cambios en Drift
   Future<void> loadMissions() async {
-    // Paso 1: Marcar como "cargando" y notificar a la UI
-    // La UI mostrará un CircularProgressIndicator
     isLoading = true;
+    errorMessage = null;
     notifyListeners(); 
 
     try {
-      // Paso 2: Obtener misiones del repositorio
-      // El repositorio puede obtenerlas de:
-      // - API (Gemini en el futuro)
-      // - Base de datos local (SQLite/Hive)
-      // - Datasource dummy (actual)
-      missions = await repository.getDailyMissions();
+      print('[MissionController] 📖 Garantizando misiones (LAZY)...');
+      
+      final today = timeProvider.todayStripped;
+      
+      // PASO 1: Garantizar que existan misiones (LAZY)
+      // Si no existen → genera nuevas misiones
+      // Si ya existen → no hace nada
+      await ensureMissionsUseCase.call(today);
+      
+      // PASO 2: Suscribirse al stream reactivo de Drift
+      // El stream emite cada vez que hay cambios en la tabla missions
+      _missionsSubscription?.cancel(); // Cancelar suscripción previa si existe
+      
+      _missionsSubscription = watchMissionsUseCase.call(today).listen(
+        (missionsList) {
+          print('[MissionController] 🔄 Stream emitió: ${missionsList.length} misiones');
+          missions = missionsList;
+          isLoading = false;
+          errorMessage = null;
+          notifyListeners();
+        },
+        onError: (error) {
+          print('[MissionController] ❌ Error en stream: $error');
+          errorMessage = 'Error al cargar misiones: $error';
+          isLoading = false;
+          notifyListeners();
+        },
+      );
+      
+      print('[MissionController] ✅ Suscrito al stream de misiones');
       
     } catch (e) {
-      print("Error al cargar misiones: $e");
-      // TODO: Manejar con Either<Failure, List<Mission>>
-      // y mostrar mensaje de error al usuario
-      
-    } finally {
-      // Paso 3: Marcar como "no cargando" sin importar si hubo éxito o error
-      // La UI ocultará el loading y mostrará la lista (o vacío si falló)
+      print('[MissionController] ❌ Error al cargar misiones: $e');
+      errorMessage = 'Error al cargar misiones: $e';
+      missions = [];
       isLoading = false;
       notifyListeners();
     }
   }
 
-  // ========== ACCIÓN 2: Toggle Misión (Marcar/Desmarcar) ==========
+  // ========== ACCIÓN 2: Regenerar Misiones (LAZY con force) ==========
+  // Permite al usuario forzar la regeneración de misiones.
+  // Útil si las misiones actuales no son adecuadas o para testing.
+  Future<void> refreshMissions() async {
+    isGenerating = true;
+    notifyListeners();
+
+    try {
+      print('[MissionController] 🔄 Regenerando misiones...');
+      
+      // TODO: Implementar forceRegenerate en EnsureMissionsForDateUseCase
+      // Por ahora, simplemente re-garantizamos
+      final today = timeProvider.todayStripped;
+      await ensureMissionsUseCase.call(today);
+      
+      print('[MissionController] ✅ Misiones regeneradas (stream las cargará)');
+      
+    } catch (e) {
+      print('[MissionController] ❌ Error al regenerar misiones: $e');
+      errorMessage = 'Error al regenerar misiones: $e';
+      
+    } finally {
+      isGenerating = false;
+      notifyListeners();
+    }
+  }
+
+  // ========== ACCIÓN 3: Toggle Misión (Marcar/Desmarcar) - OPTIMISTIC UI ==========
   // Se llama cuando el usuario toca una misión en la lista.
   // 
-  // FLUJO CORREGIDO (versión robusta):
-  // 1. Intenta actualizar la sesión del día PRIMERO
-  // 2. Si tiene éxito, persiste en el repositorio
-  // 3. Solo entonces actualiza la UI
+  // FLUJO OPTIMISTIC UI:
+  // 1. Actualiza la UI INMEDIATAMENTE (optimistic)
+  // 2. Guarda en background (sesión + repositorio)
+  // 3. Si falla → REVIERTE la UI + muestra error
   // 
-  // ¿Por qué en ese orden? Para evitar estados inconsistentes:
-  // - Si falla al agregar a la sesión → UI no se actualiza
-  // - Si la UI se actualizara primero → podría mostrar completada pero no estar en la sesión
+  // Ventajas:
+  // - La app se siente instantánea (0ms de latencia percibida)
+  // - El usuario ve feedback inmediato
+  // - Si falla, revertimos y mostramos error
   Future<void> toggleMission(int index) async {
     final mission = missions[index];
-    // Crear nueva instancia con estado invertido (inmutable)
+    final oldMission = mission; // Guardar estado anterior para revertir
+    
+    // PASO 1: OPTIMISTIC UI - Actualizar INMEDIATAMENTE
     final updatedMission = mission.copyWith(isCompleted: !mission.isCompleted);
+    missions[index] = updatedMission;
+    notifyListeners(); // ⚡ UI se actualiza INSTANTÁNEAMENTE
     
     try {
-      // PASO 1: Actualizar la sesión del día PRIMERO (puede fallar)
-      // Solo si hay un DaySessionController inyectado
+      // PASO 2: Guardar en background (sesión del día)
       if (daySessionController != null) {
         if (updatedMission.isCompleted) {
-          // Agregar a la lista de completadas del día
           await daySessionController!.addCompletedMission(updatedMission);
         } else {
-          // Remover de la lista (usuario se arrepintió)
           await daySessionController!.removeCompletedMission(updatedMission.id);
         }
       }
       
-      // PASO 2: Si todo salió bien con la sesión, persistir en el repositorio
-      // Esto guarda el estado de isCompleted para que persista en reinicios
-      await repository.updateMission(updatedMission);
+      // PASO 3: Persistir en repositorio
+      await missionRepository.updateMission(updatedMission);
       
-      // PASO 3: Solo AHORA actualizar la UI (después de confirmar persistencia)
-      // Si llegamos aquí, significa que todo salió bien
-      missions[index] = updatedMission;
-      notifyListeners(); // Avisa a la UI: "Re-renderízate con el nuevo estado"
+      print('[MissionController] ✅ Misión ${updatedMission.isCompleted ? "completada" : "desmarcada"}: ${updatedMission.title}');
       
     } catch (e) {
-      print("Error al toggle misión: $e");
-      // Si algo falló, la UI NO se actualiza
-      // El usuario verá que la misión sigue en su estado anterior
-      // TODO: Mostrar SnackBar "Error al marcar misión"
+      print('[MissionController] ❌ Error al toggle misión, REVIRTIENDO: $e');
+      
+      // PASO 4: REVERTIR si falla (rollback optimistic)
+      missions[index] = oldMission;
+      notifyListeners(); // UI vuelve al estado anterior
+      
+      // TODO: Mostrar SnackBar con error
+      errorMessage = 'Error al marcar misión: $e';
+      
+      // Limpiar error después de 3 segundos
+      Future.delayed(const Duration(seconds: 3), () {
+        errorMessage = null;
+        notifyListeners();
+      });
     }
+  }
+  
+  // ========== CLEANUP: Cancelar Suscripción al Stream ==========
+  @override
+  void dispose() {
+    _missionsSubscription?.cancel();
+    super.dispose();
   }
 }
 

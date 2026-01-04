@@ -16,6 +16,7 @@
 import 'package:flutter/foundation.dart';
 import '../../domain/entities/day_feedback_entity.dart';
 import '../../domain/usecases/day_feedback_usecase.dart';
+import '../../../../core/time/date_time_extensions.dart';
 
 /// Estados posibles del Bonfire Controller
 enum BonfireState {
@@ -74,6 +75,11 @@ class BonfireController extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   DifficultyLevel get selectedDifficulty => _selectedDifficulty;
   int get selectedEnergy => _selectedEnergy;
+  
+  // Alias getters for BonfirePage compatibility
+  DifficultyLevel get overallDifficulty => _selectedDifficulty;
+  int get energyLevel => _selectedEnergy;
+
   Set<String> get struggledMissions => Set.unmodifiable(_struggledMissions);
   Set<String> get easyMissions => Set.unmodifiable(_easyMissions);
   String get notes => _notes;
@@ -83,6 +89,23 @@ class BonfireController extends ChangeNotifier {
   bool get isSaving => _state == BonfireState.saving;
   bool get isSaved => _state == BonfireState.saved;
   bool get hasError => _state == BonfireState.error;
+
+  // ========== Métodos de UI ==========
+
+  void updateOverallDifficulty(DifficultyLevel value) {
+    _selectedDifficulty = value;
+    notifyListeners();
+  }
+
+  void updateEnergyLevel(int value) {
+    _selectedEnergy = value;
+    notifyListeners();
+  }
+
+  void updateNotes(String value) {
+    _notes = value;
+    notifyListeners();
+  }
 
   // ========== Inicialización ==========
 
@@ -214,7 +237,7 @@ class BonfireController extends ChangeNotifier {
       // Crear entidad de feedback
       final feedback = DayFeedback(
         sessionId: _sessionId!,
-        date: DateTime.now(),
+        date: DateTime.now().stripped,
         difficulty: _selectedDifficulty,
         energyLevel: _selectedEnergy,
         struggledMissions: _struggledMissions.toList(),

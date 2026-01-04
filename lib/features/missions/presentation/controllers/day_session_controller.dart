@@ -127,7 +127,7 @@ class DaySessionController extends ChangeNotifier {
   // Esto es útil para registrar días difíciles donde no se completó nada.
   Future<EndDayResult?> endDay() async {
     // Validaciones previas
-    if (_currentSession == null || _currentSession!.isFinalized) {
+    if (_currentSession == null || _currentSession!.isClosed) {
       print('[DaySessionController] ❌ No se puede finalizar: sesión no disponible o ya finalizada');
       return null; // La UI mostrará un SnackBar de error
     }
