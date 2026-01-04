@@ -45,6 +45,18 @@ class _OnboardingPageState extends State<OnboardingPage> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    // Agregar listeners para actualizar el UI cuando el usuario escribe
+    _nameController.addListener(() {
+      setState(() {});
+    });
+    _motivationController.addListener(() {
+      setState(() {});
+    });
+  }
+
+  @override
   void dispose() {
     _pageController.dispose();
     _nameController.dispose();
@@ -98,8 +110,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
       hasCompletedOnboarding: true,
     );
 
-    // Guardar perfil
-    final dataSource = UserProfileDummyDataSourceImpl();
+    // Guardar perfil con persistencia real
+    final dataSource = await createUserProfileDataSource();
     final repository = UserProfileRepositoryImpl(dataSource: dataSource);
     final saveUseCase = SaveUserProfileUseCase(repository);
     

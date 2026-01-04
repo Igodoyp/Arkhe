@@ -32,13 +32,17 @@ class EnsureMissionsForDateUseCase {
   /// Garantiza que existan misiones para una fecha específica
   /// 
   /// @param dateStripped: Fecha normalizada a medianoche
+  /// @param forceRegenerate: Si true, fuerza la regeneración aunque existan misiones
   /// @returns: Future<void> que completa cuando las misiones están garantizadas
   /// 
   /// IMPORTANTE: Esta operación es idempotente (puede llamarse múltiples veces)
-  Future<void> call(DateTime dateStripped) async {
+  Future<void> call(DateTime dateStripped, {bool forceRegenerate = false}) async {
     assert(dateStripped == dateStripped.stripped, 'Date must be stripped');
     
     // La orchestration service usa LAZY loading (verifica si existen antes de generar)
-    await orchestrationService.lazyLoadMissions(forceRegenerate: false);
+    await orchestrationService.lazyLoadMissions(
+      targetDate: dateStripped,
+      forceRegenerate: forceRegenerate,
+    );
   }
 }

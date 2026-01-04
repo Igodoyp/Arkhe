@@ -58,7 +58,9 @@ class BonfirePageRoute<T> extends PageRoute<T> {
     return Stack(
       children: [
         // Pantalla negra como base
-        Container(color: Colors.black),
+        IgnorePointer(
+          child: Container(color: Colors.black),
+        ),
 
         // Nueva pantalla (fade in desde negro)
         FadeTransition(
@@ -66,10 +68,12 @@ class BonfirePageRoute<T> extends PageRoute<T> {
           child: child,
         ),
 
-        // Overlay negro que desaparece primero
-        FadeTransition(
-          opacity: Tween<double>(begin: 1.0, end: 0.0).animate(fadeOut),
-          child: Container(color: Colors.black),
+        // Overlay negro que desaparece primero - IGNORAR EVENTOS
+        IgnorePointer(
+          child: FadeTransition(
+            opacity: Tween<double>(begin: 1.0, end: 0.0).animate(fadeOut),
+            child: Container(color: Colors.black),
+          ),
         ),
       ],
     );

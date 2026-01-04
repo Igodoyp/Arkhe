@@ -119,7 +119,7 @@ class MissionController extends ChangeNotifier {
       // TODO: Implementar forceRegenerate en EnsureMissionsForDateUseCase
       // Por ahora, simplemente re-garantizamos
       final today = timeProvider.todayStripped;
-      await ensureMissionsUseCase.call(today);
+      await ensureMissionsUseCase.call(today, forceRegenerate: true);
       
       print('[MissionController] ✅ Misiones regeneradas (stream las cargará)');
       

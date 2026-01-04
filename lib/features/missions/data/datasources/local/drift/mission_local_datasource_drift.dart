@@ -239,6 +239,28 @@ class MissionLocalDataSourceDrift {
     return totalXp;
   }
 
+  /// Obtiene el XP total histórico de TODAS las misiones completadas
+  /// 
+  /// Suma xpReward de todas las misiones completadas sin importar la fecha.
+  /// Útil para calcular el nivel del usuario.
+  /// 
+  /// @returns: XP total acumulado (todas las misiones completadas)
+  Future<int> getTotalXpAllTime() async {
+    final query = database.select(database.missions)
+      ..where((tbl) => tbl.isCompleted.equals(true));
+
+    final completedMissions = await query.get();
+    
+    final totalXp = completedMissions.fold<int>(
+      0,
+      (sum, mission) => sum + mission.xpReward,
+    );
+    
+    print('[MissionDrift] 💎 XP total histórico: $totalXp (${completedMissions.length} misiones completadas)');
+    
+    return totalXp;
+  }
+
   // ==========================================================================
   // DELETE
   // ==========================================================================

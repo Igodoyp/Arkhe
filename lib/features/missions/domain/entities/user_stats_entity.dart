@@ -3,9 +3,11 @@ import 'stat_type.dart';
 
 class UserStats {
   final Map<StatType, double> stats;
+  final int totalXp; // XP acumulado total (se actualiza al finalizar día)
 
   UserStats({
     required this.stats,
+    this.totalXp = 0,
   });
 
   // Método para obtener el valor de una stat específica
@@ -16,9 +18,11 @@ class UserStats {
   // Método copyWith para crear una copia con stats modificadas
   UserStats copyWith({
     Map<StatType, double>? stats,
+    int? totalXp,
   }) {
     return UserStats(
       stats: stats ?? Map.from(this.stats),
+      totalXp: totalXp ?? this.totalXp,
     );
   }
 
@@ -30,11 +34,22 @@ class UserStats {
     if (newStats[type]! > 100) {
       newStats[type] = 100;
     }
-    return UserStats(stats: newStats);
+    return UserStats(
+      stats: newStats,
+      totalXp: totalXp,
+    );
+  }
+
+  // Método para incrementar XP total (solo al finalizar día)
+  UserStats incrementXp(int xpGained) {
+    return UserStats(
+      stats: Map.from(stats),
+      totalXp: totalXp + xpGained,
+    );
   }
 
   @override
   String toString() {
-    return 'UserStats(stats: $stats)';
+    return 'UserStats(stats: $stats, totalXp: $totalXp)';
   }
 }

@@ -13,7 +13,17 @@ part 'database.g.dart';
   ],
 )
 class AppDatabase extends _$AppDatabase {
-  AppDatabase() : super(_openConnection());
+  // Singleton instance
+  static AppDatabase? _instance;
+
+  // Factory constructor que retorna siempre la misma instancia
+  factory AppDatabase() {
+    _instance ??= AppDatabase._internal();
+    return _instance!;
+  }
+
+  // Constructor privado real
+  AppDatabase._internal() : super(_openConnection());
   
   // Constructor para testing
   AppDatabase.forTesting(super.e);

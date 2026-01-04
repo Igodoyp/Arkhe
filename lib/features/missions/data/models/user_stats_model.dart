@@ -5,6 +5,7 @@ import '../../domain/entities/stat_type.dart';
 class UserStatsModel extends UserStats {
   UserStatsModel({
     required super.stats,
+    super.totalXp,
   });
 
   // Factory para convertir JSON a UserStatsModel
@@ -18,6 +19,7 @@ class UserStatsModel extends UserStats {
         StatType.dexterity: (json['dexterity'] as num?)?.toDouble() ?? 0.0,
         StatType.wisdom: (json['wisdom'] as num?)?.toDouble() ?? 0.0,
       },
+      totalXp: (json['totalXp'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -30,6 +32,7 @@ class UserStatsModel extends UserStats {
       'vitality': stats[StatType.vitality],
       'dexterity': stats[StatType.dexterity],
       'wisdom': stats[StatType.wisdom],
+      'totalXp': totalXp,
     };
   }
 
@@ -37,9 +40,11 @@ class UserStatsModel extends UserStats {
   @override
   UserStatsModel copyWith({
     Map<StatType, double>? stats,
+    int? totalXp,
   }) {
     return UserStatsModel(
       stats: stats ?? Map.from(this.stats),
+      totalXp: totalXp ?? this.totalXp,
     );
   }
 
@@ -52,6 +57,15 @@ class UserStatsModel extends UserStats {
     if (newStats[type]! > 100) {
       newStats[type] = 100;
     }
-    return UserStatsModel(stats: newStats);
+    return UserStatsModel(stats: newStats, totalXp: totalXp);
+  }
+  
+  // Override de incrementXp para retornar UserStatsModel
+  @override
+  UserStatsModel incrementXp(int xpGained) {
+    return UserStatsModel(
+      stats: Map.from(stats),
+      totalXp: totalXp + xpGained,
+    );
   }
 }

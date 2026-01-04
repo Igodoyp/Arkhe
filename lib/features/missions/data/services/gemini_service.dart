@@ -15,10 +15,12 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 /// - Response format: JSON
 class GeminiService {
   final GenerativeModel _model;
+  final String _apiKey;
   
   GeminiService({required String apiKey})
-      : _model = GenerativeModel(
-          model: 'gemini-1.5-flash',
+      : _apiKey = apiKey,
+        _model = GenerativeModel(
+          model: 'gemini-2.5-flash',
           apiKey: apiKey,
           generationConfig: GenerationConfig(
             temperature: 0.7,
@@ -56,7 +58,23 @@ class GeminiService {
       return jsonResponse;
     } catch (e) {
       print('[GeminiService] ❌ Error al generar misiones: $e');
+      // Intentar listar modelos disponibles para debug
+      await listAvailableModels();
       rethrow;
+    }
+  }
+
+  /// Lista los modelos disponibles para la API Key actual
+  Future<void> listAvailableModels() async {
+    try {
+      // Nota: El SDK de Dart no expone listModels directamente en GenerativeModel
+      // pero podemos intentar inferirlo o usar un cliente HTTP crudo si fuera necesario.
+      // Sin embargo, el error sugiere llamar a ListModels.
+      // Como el SDK actual es limitado, imprimiremos un mensaje de ayuda.
+      print('[GeminiService] ℹ️ Para ver los modelos disponibles, visita: https://aistudio.google.com/app/apikey');
+      print('[GeminiService] ℹ️ O usa curl: curl https://generativelanguage.googleapis.com/v1beta/models?key=$_apiKey');
+    } catch (e) {
+      print('[GeminiService] Error al listar modelos: $e');
     }
   }
 

@@ -26,6 +26,7 @@ class BonfirePage extends StatefulWidget {
   final String sessionId;
   final List<Mission> completedMissions;
   final int totalStatsGained;
+  final int totalXpGained;
   final DaySessionController daySessionController;
 
   const BonfirePage({
@@ -33,6 +34,7 @@ class BonfirePage extends StatefulWidget {
     required this.sessionId,
     required this.completedMissions,
     required this.totalStatsGained,
+    required this.totalXpGained,
     required this.daySessionController,
   });
 
@@ -53,10 +55,17 @@ class _BonfirePageState extends State<BonfirePage>
   late Animation<double> _statsAnimation;
 
   final TextEditingController _reflectionController = TextEditingController();
+  final FocusNode _reflectionFocusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
+    
+    // Listener para actualizar UI al escribir reflexión
+    _reflectionController.addListener(() {
+      final controller = context.read<BonfireController>();
+      controller.updateNotes(_reflectionController.text);
+    });
 
     // Animación cinemática inicial (3 segundos)
     _cinematicController = AnimationController(
@@ -110,6 +119,7 @@ class _BonfirePageState extends State<BonfirePage>
     _cinematicController.dispose();
     _fadeController.dispose();
     _reflectionController.dispose();
+    _reflectionFocusNode.dispose();
     super.dispose();
   }
 
@@ -117,6 +127,13 @@ class _BonfirePageState extends State<BonfirePage>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          print('🔥🔥🔥 [BonfirePage] FloatingActionButton PRESSED! Touch events are working!');
+        },
+        child: const Icon(Icons.bug_report),
+        backgroundColor: Colors.red,
+      ),
       body: Consumer<BonfireController>(
         builder: (context, controller, child) {
           if (controller.hasError) {
@@ -244,6 +261,14 @@ class _BonfirePageState extends State<BonfirePage>
                         ),
                         const SizedBox(height: 20),
 
+                        // XP ganado
+                        _buildCinematicStat(
+                          'XP Ganado',
+                          '+${widget.totalXpGained}',
+                          Icons.stars,
+                        ),
+                        const SizedBox(height: 20),
+
                         // Stats ganadas
                         _buildCinematicStat(
                           'Stats Ganadas',
@@ -352,8 +377,10 @@ class _BonfirePageState extends State<BonfirePage>
   // ========================================================================
 
   Widget _buildRitualScreen(BuildContext context, BonfireController controller) {
-    return FadeTransition(
-      opacity: _fadeAnimation,
+    return AnimatedOpacity(
+      opacity: _phase == 1 ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 1500),
+      curve: Curves.easeInOut,
       child: Container(
         decoration: const BoxDecoration(
           gradient: RadialGradient(
@@ -375,9 +402,11 @@ class _BonfirePageState extends State<BonfirePage>
                 const SizedBox(height: 20),
 
                 // ========== HOGUERA ANIMADA ==========
-                const BonfireAnimation(
-                  size: 200,
-                  isActive: true,
+                const IgnorePointer(
+                  child: BonfireAnimation(
+                    size: 200,
+                    isActive: true,
+                  ),
                 ),
                 const SizedBox(height: 40),
 
@@ -502,6 +531,41 @@ class _BonfirePageState extends State<BonfirePage>
           Divider(color: Colors.orange.shade900.withOpacity(0.3)),
           const SizedBox(height: 16),
 
+          // XP Ganado
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'XP Ganado',
+                style: TextStyle(
+                  color: Colors.orange.shade200,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade900.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '+${widget.totalXpGained}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Total Stats Ganadas
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -699,6 +763,12 @@ class _BonfirePageState extends State<BonfirePage>
           // Campo de reflexión
           TextField(
             controller: _reflectionController,
+            focusNode: _reflectionFocusNode,
+            onTap: () {
+              if (!_reflectionFocusNode.hasFocus) {
+                _reflectionFocusNode.requestFocus();
+              }
+            },
             maxLines: 6,
             style: const TextStyle(
               color: Colors.white,
@@ -785,39 +855,45 @@ class _BonfirePageState extends State<BonfirePage>
         final (level, icon, color) = diff;
         final isSelected = controller.overallDifficulty == level;
 
-        return InkWell(
-          onTap: () => controller.updateOverallDifficulty(level),
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? color.withOpacity(0.3)
-                  : Colors.black.withOpacity(0.3),
-              border: Border.all(
-                color: isSelected ? color : Colors.white.withOpacity(0.2),
-                width: isSelected ? 2 : 1,
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () {
+              print('[BonfirePage] 🔘 Difficulty tapped: [BonfirePage] 🔘 Difficulty tapped: [BonfirePage] 🔘 Difficulty tapped: ${level.displayName}');
+              controller.updateOverallDifficulty(level);
+            },
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? color.withOpacity(0.3)
+                    : Colors.black.withOpacity(0.3),
+                border: Border.all(
+                  color: isSelected ? color : Colors.white.withOpacity(0.2),
+                  width: isSelected ? 2 : 1,
+                ),
+                borderRadius: BorderRadius.circular(8),
               ),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  color: isSelected ? color : Colors.white.withOpacity(0.5),
-                  size: 20,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  level.displayName,
-                  style: TextStyle(
-                    color: isSelected ? Colors.white : Colors.white.withOpacity(0.7),
-                    fontSize: 12,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    icon,
+                    color: isSelected ? color : Colors.white.withOpacity(0.5),
+                    size: 20,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 6),
+                  Text(
+                    level.displayName,
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : Colors.white.withOpacity(0.7),
+                      fontSize: 12,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -841,39 +917,45 @@ class _BonfirePageState extends State<BonfirePage>
         final (value, label, icon, color) = energy;
         final isSelected = controller.energyLevel == value;
 
-        return InkWell(
-          onTap: () => controller.updateEnergyLevel(value),
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? color.withOpacity(0.3)
-                  : Colors.black.withOpacity(0.3),
-              border: Border.all(
-                color: isSelected ? color : Colors.white.withOpacity(0.2),
-                width: isSelected ? 2 : 1,
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () {
+              print('[BonfirePage] 🔋 Energy tapped: $value');
+              controller.updateEnergyLevel(value);
+            },
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? color.withOpacity(0.3)
+                    : Colors.black.withOpacity(0.3),
+                border: Border.all(
+                  color: isSelected ? color : Colors.white.withOpacity(0.2),
+                  width: isSelected ? 2 : 1,
+                ),
+                borderRadius: BorderRadius.circular(8),
               ),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  color: isSelected ? color : Colors.white.withOpacity(0.5),
-                  size: 20,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: isSelected ? Colors.white : Colors.white.withOpacity(0.7),
-                    fontSize: 12,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    icon,
+                    color: isSelected ? color : Colors.white.withOpacity(0.5),
+                    size: 20,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 6),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : Colors.white.withOpacity(0.7),
+                      fontSize: 12,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );

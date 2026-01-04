@@ -18,4 +18,12 @@ abstract class MissionRepository {
   
   /// Actualiza el estado de una misión (principalmente isCompleted)
   Future<void> updateMission(Mission mission);
+  
+  /// Obtiene el XP total acumulado de TODAS las misiones completadas (histórico)
+  /// 
+  /// Suma el xpReward de todas las misiones donde isCompleted == true,
+  /// sin importar la fecha. Útil para calcular nivel del usuario.
+  /// 
+  /// @returns: XP total acumulado histórico
+  Future<int> getTotalXpAllTime();
 }

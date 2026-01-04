@@ -55,8 +55,8 @@ class _SplashPageState extends State<SplashPage>
     // Esperar al menos 2 segundos para mostrar el splash
     await Future.delayed(const Duration(seconds: 2));
     
-    // Crear dependencias
-    final dataSource = UserProfileDummyDataSourceImpl();
+    // Crear dependencias con persistencia real
+    final dataSource = await createUserProfileDataSource();
     final repository = UserProfileRepositoryImpl(dataSource: dataSource);
     final getUserProfileUseCase = GetUserProfileUseCase(repository);
     

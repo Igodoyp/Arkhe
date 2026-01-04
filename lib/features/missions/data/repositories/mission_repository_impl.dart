@@ -95,6 +95,15 @@ class MissionRepositoryImpl implements MissionRepository {
     return await localDataSource.getTotalXpByDate(dateStripped);
   }
 
+  @override
+  Future<int> getTotalXpAllTime() async {
+    try {
+      return await localDataSource.getTotalXpAllTime();
+    } catch (e) {
+      throw Exception('Error al obtener XP total histórico: $e');
+    }
+  }
+
   /// Elimina todas las misiones de un día (útil para regenerar)
   Future<void> deleteMissionsForDate(DateTime dateStripped) async {
     assert(dateStripped == dateStripped.stripped);

@@ -3,17 +3,20 @@ import 'package:provider/provider.dart';
 import '../controllers/mission_controller.dart';
 import '../controllers/day_session_controller.dart';
 import '../controllers/bonfire_controller.dart';
-import '../../data/datasources/user_stats_datasource.dart';
 import '../../data/datasources/day_feedback_datasource.dart';
 import '../../data/datasources/user_profile_datasource.dart';
 import '../../data/datasources/local/drift/database.dart';
 import '../../data/datasources/local/drift/mission_local_datasource_drift.dart';
 import '../../data/datasources/local/drift/day_session_local_datasource_drift.dart';
+import '../../data/datasources/local/drift/user_stats_local_datasource_drift.dart';
 import '../../data/repositories/mission_repository_impl.dart';
 import '../../data/repositories/day_session_repository_impl.dart';
-import '../../data/repositories/user_stats_repository_impl.dart';
+import '../../data/repositories/user_stats_repository_drift_impl.dart';
 import '../../data/repositories/day_feedback_repository_impl.dart';
 import '../../data/repositories/user_profile_repository_impl.dart';
+import '../../domain/repositories/mission_repository.dart';
+import '../../domain/repositories/user_profile_repository.dart';
+import '../../domain/repositories/user_stats_repository.dart';
 import '../../domain/usecases/day_session_usecase.dart';
 import '../../domain/usecases/day_feedback_usecase.dart';
 import '../../domain/usecases/get_daily_missions_usecase.dart';
@@ -25,11 +28,12 @@ import '../../data/services/gemini_service.dart';
 import '../../../../core/time/real_time_provider.dart';
 import '../../../../core/haptic/haptic_service.dart';
 import '../../domain/entities/stat_type.dart';
-import 'user_stats_page.dart';
+import 'profile_page.dart';
 import 'bonfire_page.dart';
 import '../widgets/bonfire_page_route.dart';
 import '../widgets/celebration_effects.dart';
 import '../widgets/shimmer_loading.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class MissionsPage extends StatefulWidget {
   const MissionsPage({super.key});
@@ -42,12 +46,26 @@ class _MissionsPageState extends State<MissionsPage> {
   // Controllers
   late MissionController _missionController;
   late DaySessionController _daySessionController;
+  
+  // Repositories (para pasar a otras páginas)
+  late MissionRepository _missionRepository;
+  late UserProfileRepository _userProfileRepository;
+  late UserStatsRepository _userStatsRepository;
+  
+  // Estado de inicialización
+  bool _isInitialized = false;
 
   @override
   void initState() {
     super.initState();
-    
-    // === Inyección de Dependencias Manual ===
+    // Inicializar async después de que el frame se construya
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeAsync();
+    });
+  }
+  
+  Future<void> _initializeAsync() async {
+    // === Inyección de Dependencias Manual (Async) ===
     
     // 1. Database (Drift)
     final database = AppDatabase();
@@ -58,9 +76,11 @@ class _MissionsPageState extends State<MissionsPage> {
     // 2. Local DataSources (Drift)
     final missionLocalDataSource = MissionLocalDataSourceDrift(database: database);
     final daySessionLocalDataSource = DaySessionLocalDataSourceDrift(database: database);
-    final userStatsDataSource = StatsDummyDataSourceImpl(); // TODO: Migrar a Drift
+    final userStatsLocalDataSource = UserStatsLocalDataSourceDrift(database: database);
     final dayFeedbackDataSource = DayFeedbackDataSourceDummy();
-    final userProfileDataSource = UserProfileDummyDataSourceImpl();
+    
+    // 2.1. User Profile con persistencia real (async)
+    final userProfileDataSource = await createUserProfileDataSource();
     
     // 3. Repositories
     final missionRepository = MissionRepositoryImpl(
@@ -71,9 +91,14 @@ class _MissionsPageState extends State<MissionsPage> {
       localDataSource: daySessionLocalDataSource,
       timeProvider: timeProvider,
     );
-    final userStatsRepository = UserStatsRepositoryImpl(remoteDataSource: userStatsDataSource);
+    final userStatsRepository = UserStatsRepositoryDriftImpl(localDataSource: userStatsLocalDataSource);
     final dayFeedbackRepository = DayFeedbackRepositoryImpl(dataSource: dayFeedbackDataSource);
     final userProfileRepository = UserProfileRepositoryImpl(dataSource: userProfileDataSource);
+    
+    // Guardar referencias para otras páginas
+    _missionRepository = missionRepository;
+    _userProfileRepository = userProfileRepository;
+    _userStatsRepository = userStatsRepository;
     
     // 4. Use Cases
     final getCurrentDaySessionUseCase = GetCurrentDaySessionUseCase(daySessionRepository);
@@ -81,11 +106,16 @@ class _MissionsPageState extends State<MissionsPage> {
     final removeCompletedMissionUseCase = RemoveCompletedMissionUseCase(daySessionRepository);
     final endDayUseCase = EndDayUseCase(
       daySessionRepository: daySessionRepository,
+      missionRepository: missionRepository,
       userStatsRepository: userStatsRepository,
     );
     
     // 4.1. AI Services
-    final geminiService = GeminiService(apiKey: ''); // TODO: Add real API key from env
+    final apiKey = dotenv.env['GEMINI_API_KEY'] ?? '';
+    if (apiKey.isEmpty) {
+      print('⚠️ GEMINI_API_KEY no encontrada en .env');
+    }
+    final geminiService = GeminiService(apiKey: apiKey);
     
     // 4.2. Mission Generation UseCase
     final generateDailyMissionsUseCase = GenerateDailyMissionsUseCase(
@@ -129,17 +159,24 @@ class _MissionsPageState extends State<MissionsPage> {
       daySessionController: _daySessionController,
     );
     
-    // 5. Cargar datos
+    // 6. Cargar datos
     _missionController.loadMissions();
     _daySessionController.loadCurrentSession();
     
-    // 6. Escuchar cambios
+    // 7. Escuchar cambios
     _missionController.addListener(() {
       if (mounted) setState(() {});
     });
     _daySessionController.addListener(() {
       if (mounted) setState(() {});
     });
+    
+    // 8. Marcar como inicializado
+    if (mounted) {
+      setState(() {
+        _isInitialized = true;
+      });
+    }
   }
   
   // Método para navegar a la pantalla de Bonfire después de finalizar el día
@@ -196,6 +233,7 @@ class _MissionsPageState extends State<MissionsPage> {
             sessionId: bonfireData.sessionId,
             completedMissions: bonfireData.completedMissions,
             totalStatsGained: bonfireData.totalStatsGained,
+            totalXpGained: bonfireData.totalXpGained,
             daySessionController: _daySessionController,
           ),
         ),
@@ -207,6 +245,18 @@ class _MissionsPageState extends State<MissionsPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Mostrar loading mientras se inicializa
+    if (!_isInitialized) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF0A0E21),
+        body: Center(
+          child: CircularProgressIndicator(
+            color: Color(0xFFFFD700),
+          ),
+        ),
+      );
+    }
+    
     return Scaffold(
       backgroundColor: const Color(0xFF232323),
       appBar: AppBar(
@@ -226,12 +276,18 @@ class _MissionsPageState extends State<MissionsPage> {
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.bar_chart, color: Colors.white),
-            tooltip: 'Ver Stats',
+            icon: const Icon(Icons.person, color: Colors.white),
+            tooltip: 'Perfil',
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const StatsPage()),
+                MaterialPageRoute(
+                  builder: (context) => ProfilePage(
+                    userProfileRepository: _userProfileRepository,
+                    userStatsRepository: _userStatsRepository,
+                    missionRepository: _missionRepository,
+                  ),
+                ),
               );
             },
           ),

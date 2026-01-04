@@ -1,5 +1,8 @@
 // data/datasources/user_profile_datasource.dart
 
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+
 // ============================================================================
 // 1. INTERFAZ DEL DATASOURCE (Contrato/Abstracción)
 // ============================================================================
@@ -26,11 +29,22 @@ abstract class UserProfileDataSource {
 
 /// Implementación en memoria para desarrollo y testing
 /// 
+/// SINGLETON: Usa una única instancia compartida para que el perfil
+/// persista entre navegaciones dentro de la misma sesión de la app.
+/// 
 /// En producción, esto será reemplazado por:
 /// - SharedPreferences (perfil pequeño, simple)
 /// - Drift/SQLite (si se necesita versionado/historial)
 /// - Hive (alternativa ligera)
 class UserProfileDummyDataSourceImpl implements UserProfileDataSource {
+  // Singleton pattern
+  static final UserProfileDummyDataSourceImpl _instance = 
+      UserProfileDummyDataSourceImpl._internal();
+  
+  factory UserProfileDummyDataSourceImpl() => _instance;
+  
+  UserProfileDummyDataSourceImpl._internal();
+  
   // Variable privada que guarda el perfil en memoria
   Map<String, dynamic>? _profile;
 
@@ -39,7 +53,7 @@ class UserProfileDummyDataSourceImpl implements UserProfileDataSource {
     // Simula delay de lectura
     await Future.delayed(const Duration(milliseconds: 200));
     
-    print('[UserProfileDataSource] 📖 ${_profile != null ? "Perfil cargado" : "No hay perfil"}');
+    print('[UserProfileDataSource] 📖 ${_profile != null ? "Perfil cargado: ${_profile!['name']}" : "No hay perfil"}');
     return _profile;
   }
 
@@ -57,7 +71,9 @@ class UserProfileDummyDataSourceImpl implements UserProfileDataSource {
     // Simula delay de verificación
     await Future.delayed(const Duration(milliseconds: 50));
     
-    return _profile != null;
+    final result = _profile != null;
+    print('[UserProfileDataSource] 🔍 hasProfile: $result');
+    return result;
   }
 
   @override
@@ -71,43 +87,75 @@ class UserProfileDummyDataSourceImpl implements UserProfileDataSource {
 }
 
 // ============================================================================
-// NOTAS PARA MIGRACIÓN A PERSISTENCIA REAL
+// 3. IMPLEMENTACIÓN CON SHAREDPREFERENCES (Persistencia Real)
 // ============================================================================
-//
-// Opción 1 - SharedPreferences (Recomendado para este caso):
+
+/// Implementación con SharedPreferences para persistencia entre sesiones
+/// 
+/// Ventajas:
+/// - Sobrevive al reinicio de la app
+/// - Simple y ligero (ideal para un solo perfil)
+/// - No requiere esquema SQL
+class UserProfileSharedPrefsDataSourceImpl implements UserProfileDataSource {
+  final SharedPreferences prefs;
+  static const String _key = 'user_profile';
+
+  UserProfileSharedPrefsDataSourceImpl({required this.prefs});
+
+  @override
+  Future<Map<String, dynamic>?> getUserProfile() async {
+    final jsonString = prefs.getString(_key);
+    if (jsonString == null) {
+      print('[UserProfileDataSource] 📖 No hay perfil (SharedPrefs)');
+      return null;
+    }
+    
+    final profile = json.decode(jsonString) as Map<String, dynamic>;
+    print('[UserProfileDataSource] 📖 Perfil cargado: ${profile['name']} (SharedPrefs)');
+    return profile;
+  }
+
+  @override
+  Future<void> saveUserProfile(Map<String, dynamic> profileJson) async {
+    final jsonString = json.encode(profileJson);
+    await prefs.setString(_key, jsonString);
+    print('[UserProfileDataSource] 💾 Perfil guardado: ${profileJson['name']} (SharedPrefs)');
+  }
+
+  @override
+  Future<bool> hasProfile() async {
+    final result = prefs.containsKey(_key);
+    print('[UserProfileDataSource] 🔍 hasProfile: $result (SharedPrefs)');
+    return result;
+  }
+
+  @override
+  Future<void> deleteUserProfile() async {
+    await prefs.remove(_key);
+    print('[UserProfileDataSource] 🗑️ Perfil eliminado (SharedPrefs)');
+  }
+}
+
 // ============================================================================
-// class UserProfileSharedPrefsDataSourceImpl implements UserProfileDataSource {
-//   final SharedPreferences prefs;
-//   static const String _key = 'user_profile';
-//
-//   UserProfileSharedPrefsDataSourceImpl({required this.prefs});
-//
-//   @override
-//   Future<Map<String, dynamic>?> getUserProfile() async {
-//     final jsonString = prefs.getString(_key);
-//     if (jsonString == null) return null;
-//     return json.decode(jsonString) as Map<String, dynamic>;
-//   }
-//
-//   @override
-//   Future<void> saveUserProfile(Map<String, dynamic> profileJson) async {
-//     final jsonString = json.encode(profileJson);
-//     await prefs.setString(_key, jsonString);
-//   }
-//
-//   @override
-//   Future<bool> hasProfile() async {
-//     return prefs.containsKey(_key);
-//   }
-//
-//   @override
-//   Future<void> deleteUserProfile() async {
-//     await prefs.remove(_key);
-//   }
-// }
-//
+// 4. FACTORY SEGURO (Con fallback para tests)
 // ============================================================================
-// Opción 2 - Drift/SQLite (Si necesitas historial de versiones):
+
+/// Crea un datasource con persistencia real si está disponible,
+/// o fallback a memoria si no (útil para widget tests donde SharedPreferences
+/// puede no estar disponible)
+Future<UserProfileDataSource> createUserProfileDataSource() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    print('[UserProfileDataSource] ✅ Usando SharedPreferences (persistencia real)');
+    return UserProfileSharedPrefsDataSourceImpl(prefs: prefs);
+  } catch (e) {
+    print('[UserProfileDataSource] ⚠️ SharedPreferences no disponible, usando memoria: $e');
+    return UserProfileDummyDataSourceImpl();
+  }
+}
+
+// ============================================================================
+// NOTAS PARA MIGRACIÓN FUTURA A DRIFT
 // ============================================================================
 // Agregar a tables.dart:
 //

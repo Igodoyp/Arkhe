@@ -194,6 +194,7 @@ class DaySessionController extends ChangeNotifier {
       sessionId: _currentSession!.id,
       completedMissions: _currentSession!.completedMissions,
       totalStatsGained: totalStatsGained,
+      totalXpGained: _lastEndDayResult!.totalXpGained,
     );
   }
 }
@@ -206,11 +207,13 @@ class BonfireData {
   final String sessionId;
   final List<Mission> completedMissions;
   final int totalStatsGained;
+  final int totalXpGained;
 
   BonfireData({
     required this.sessionId,
     required this.completedMissions,
     required this.totalStatsGained,
+    required this.totalXpGained,
   });
 }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 // --- IMPORTACIONES DE TU ARQUITECTURA ---
 // (Asegúrate de que las rutas coincidan con tu estructura de carpetas)
@@ -23,9 +24,16 @@ import 'core/time/real_time_provider.dart';
 import 'features/missions/presentation/providers/mission_provider.dart';
 import 'features/missions/presentation/pages/splash_page.dart';
 
-void main() {
+void main() async {
   // Asegura que el motor de Flutter esté listo antes de cualquier lógica
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Cargar variables de entorno
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    print('⚠️ No se pudo cargar el archivo .env: $e');
+  }
 
   // ---------------------------------------------------------
   // ZONA DE ENSAMBLAJE (DEPENDENCY INJECTION)
