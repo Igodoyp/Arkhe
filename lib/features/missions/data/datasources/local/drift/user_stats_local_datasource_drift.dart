@@ -53,14 +53,15 @@ class UserStatsLocalDataSourceDrift {
   /// Guarda las stats del usuario en Drift
   /// 
   /// Usa InsertMode.replace para actualizar si ya existe
-  Future<void> saveUserStats(Map<StatType, double> stats, int totalXp) async {
+  /// @param lastUpdated: Timestamp de actualización (inyectado desde repo)
+  Future<void> saveUserStats(Map<StatType, double> stats, int totalXp, DateTime lastUpdated) async {
     final statsJson = _statsToJson(stats, totalXp);
     
     await database.into(database.userStats).insert(
       UserStatsCompanion(
         id: const Value(defaultUserId),
         statsJson: Value(statsJson),
-        lastUpdated: Value(DateTime.now()),
+        lastUpdated: Value(lastUpdated),
       ),
       mode: InsertMode.replace,
     );
@@ -71,7 +72,8 @@ class UserStatsLocalDataSourceDrift {
   /// Actualiza una stat específica (incremento)
   /// 
   /// Útil para aplicar rewards de misiones
-  Future<void> incrementStat(StatType type, double amount) async {
+  /// @param lastUpdated: Timestamp de actualización (inyectado desde repo)
+  Future<void> incrementStat(StatType type, double amount, DateTime lastUpdated) async {
     final current = await getUserStats();
     final newStats = Map<StatType, double>.from(current.stats);
     newStats[type] = (newStats[type] ?? 0.0) + amount;
@@ -81,7 +83,7 @@ class UserStatsLocalDataSourceDrift {
       newStats[type] = 100;
     }
     
-    await saveUserStats(newStats, current.totalXp);
+    await saveUserStats(newStats, current.totalXp, lastUpdated);
   }
 
   // ==========================================================================

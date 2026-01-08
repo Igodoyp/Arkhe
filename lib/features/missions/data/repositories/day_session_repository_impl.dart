@@ -82,8 +82,8 @@ class DaySessionRepositoryImpl implements DaySessionRepository {
   Future<void> finalizeDaySession() async {
     final currentSession = await getCurrentDaySession();
     
-    // Marcar sesión como cerrada (definitivo)
-    await localDataSource.closeSession(currentSession.id);
+    // Marcar sesión como cerrada (definitivo) con timestamp desde TimeProvider
+    await localDataSource.closeSession(currentSession.id, timeProvider.now);
   }
 
   @override
@@ -96,12 +96,19 @@ class DaySessionRepositoryImpl implements DaySessionRepository {
     }
   }
 
+  @override
+  Future<DaySession?> getSessionByDate(DateTime dateStripped) async {
+    assert(dateStripped == dateStripped.stripped, 
+      'Date must be stripped to midnight (got $dateStripped)');
+    
+    final sessionData = await localDataSource.getSessionByDate(dateStripped);
+    return sessionData != null ? _sessionDataToEntity(sessionData) : null;
+  }
+
   /// Obtiene sesión de ayer para el branching binario
   Future<DaySession?> getYesterdaySession() async {
     final yesterday = timeProvider.yesterdayStripped;
-    final sessionData = await localDataSource.getSessionByDate(yesterday);
-    
-    return sessionData != null ? _sessionDataToEntity(sessionData) : null;
+    return await getSessionByDate(yesterday);
   }
 
   /// Verifica si hay sesión cerrada para una fecha
@@ -115,21 +122,9 @@ class DaySessionRepositoryImpl implements DaySessionRepository {
   // ==========================================================================
 
   DaySession _sessionDataToEntity(DaySessionData data) {
-    // Parse completedMissionIds de JSON string a lista
-    List<String> missionIds = [];
-    if (data.completedMissionIds != null && data.completedMissionIds!.isNotEmpty) {
-      // El campo es un string JSON como "[id1, id2, id3]"
-      // Por simplicidad, aquí solo guardamos IDs, no misiones completas
-      // En una implementación real, podrías hacer un join con Missions table
-      try {
-        // Remover [ ] y split por comas
-        final cleaned = data.completedMissionIds!.replaceAll('[', '').replaceAll(']', '');
-        missionIds = cleaned.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-      } catch (e) {
-        print('[DaySessionRepo] ⚠️ Error parseando completedMissionIds: $e');
-      }
-    }
-
+    // Parse completedMissionIds de JSON string a lista (NO USADO actualmente)
+    // En el futuro podrías hacer join con Missions table para hidratar completedMissions
+    
     return DaySession(
       id: data.id,
       date: data.date,

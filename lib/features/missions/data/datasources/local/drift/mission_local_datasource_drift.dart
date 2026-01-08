@@ -142,14 +142,14 @@ class MissionLocalDataSourceDrift {
   /// 
   /// @param missionId: ID de la misión
   /// @param isCompleted: true para marcar como completada, false para desmarcar
-  Future<void> setCompleted(String missionId, bool isCompleted) async {
-    final now = DateTime.now();
+  /// @param updatedAt: Timestamp del cambio (inyectado desde repo)
+  Future<void> setCompleted(String missionId, bool isCompleted, DateTime updatedAt) async {
     
     final rowsAffected = await (database.update(database.missions)
       ..where((tbl) => tbl.id.equals(missionId))).write(
       MissionsCompanion(
         isCompleted: Value(isCompleted),
-        updatedAt: Value(now),
+        updatedAt: Value(updatedAt),
       ),
     );
 

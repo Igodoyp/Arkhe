@@ -1,4 +1,3 @@
-import 'package:d0/core/time/time_provider.dart';
 import 'package:d0/core/time/real_time_provider.dart';
 import 'package:d0/core/time/fake_time_provider.dart';
 import 'package:flutter_test/flutter_test.dart';

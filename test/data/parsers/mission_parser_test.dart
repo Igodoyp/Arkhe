@@ -2,7 +2,6 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:d0/features/missions/data/parsers/mission_parser.dart';
-import 'package:d0/features/missions/domain/entities/mission_entity.dart';
 import 'package:d0/features/missions/domain/entities/stat_type.dart';
 
 void main() {

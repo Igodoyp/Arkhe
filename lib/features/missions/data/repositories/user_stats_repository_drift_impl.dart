@@ -1,4 +1,5 @@
 // data/repositories/user_stats_repository_drift_impl.dart
+import '../../../../core/time/time_provider.dart';
 import '../../domain/entities/stat_type.dart';
 import '../../domain/entities/user_stats_entity.dart';
 import '../../domain/repositories/user_stats_repository.dart';
@@ -12,8 +13,12 @@ import '../datasources/local/drift/user_stats_local_datasource_drift.dart';
 /// - Proveer stats iniciales si no existen
 class UserStatsRepositoryDriftImpl implements UserStatsRepository {
   final UserStatsLocalDataSourceDrift localDataSource;
+  final TimeProvider timeProvider;
 
-  UserStatsRepositoryDriftImpl({required this.localDataSource});
+  UserStatsRepositoryDriftImpl({
+    required this.localDataSource,
+    required this.timeProvider,
+  });
 
   @override
   Future<UserStats> getUserStats() async {
@@ -33,7 +38,7 @@ class UserStatsRepositoryDriftImpl implements UserStatsRepository {
   @override
   Future<void> updateUserStats(UserStats stats) async {
     try {
-      await localDataSource.saveUserStats(stats.stats, stats.totalXp);
+      await localDataSource.saveUserStats(stats.stats, stats.totalXp, timeProvider.now);
     } catch (e) {
       throw Exception('Error al actualizar stats: $e');
     }
@@ -41,7 +46,7 @@ class UserStatsRepositoryDriftImpl implements UserStatsRepository {
 
   /// Incrementa una stat específica (helper)
   Future<void> incrementStat(StatType type, double amount) async {
-    await localDataSource.incrementStat(type, amount);
+    await localDataSource.incrementStat(type, amount, timeProvider.now);
   }
 
   /// Resetea stats a 0 (útil para testing)

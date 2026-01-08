@@ -14,7 +14,7 @@ class UserProfileModel extends UserProfile {
     super.additionalContext,
     super.challengePreferences = const {},
     super.hasCompletedOnboarding = false,
-    super.lastUpdated,
+    required super.lastUpdated,
   });
 
   // ========== Factory Constructors ==========
@@ -51,7 +51,7 @@ class UserProfileModel extends UserProfile {
       hasCompletedOnboarding: json['hasCompletedOnboarding'] as bool? ?? false,
       lastUpdated: json['lastUpdated'] != null 
           ? DateTime.parse(json['lastUpdated'] as String)
-          : DateTime.now(),
+          : throw ArgumentError('lastUpdated is required in UserProfile JSON'),
     );
   }
 
@@ -102,7 +102,8 @@ class UserProfileModel extends UserProfile {
   // ========== Factory para crear perfil por defecto ==========
   
   /// Crea un perfil de ejemplo/default para testing o onboarding
-  factory UserProfileModel.defaultProfile() {
+  /// @param lastUpdated: Timestamp opcional (solo para testing/demo, usa DateTime.now si no se provee)
+  factory UserProfileModel.defaultProfile({DateTime? lastUpdated}) {
     return UserProfileModel(
       id: 'default',
       name: 'Usuario',
@@ -120,7 +121,7 @@ class UserProfileModel extends UserProfile {
         'Hacer ejercicio 3 veces por semana',
       ],
       additionalContext: null,
-      lastUpdated: DateTime.now(),
+      lastUpdated: lastUpdated ?? DateTime.now(),  // Fallback solo para testing
     );
   }
 }

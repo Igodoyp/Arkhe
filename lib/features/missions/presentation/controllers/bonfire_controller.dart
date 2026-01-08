@@ -17,6 +17,7 @@ import 'package:flutter/foundation.dart';
 import '../../domain/entities/day_feedback_entity.dart';
 import '../../domain/usecases/day_feedback_usecase.dart';
 import '../../../../core/time/date_time_extensions.dart';
+import '../../../../core/time/time_provider.dart';
 
 /// Estados posibles del Bonfire Controller
 enum BonfireState {
@@ -43,6 +44,7 @@ class BonfireController extends ChangeNotifier {
   final GetFeedbackHistoryUseCase getFeedbackHistoryUseCase;
   final AnalyzeFeedbackTrendsUseCase analyzeFeedbackTrendsUseCase;
   final GenerateAIPromptUseCase generateAIPromptUseCase;
+  final TimeProvider timeProvider;
 
   // ========== Estado ==========
   BonfireState _state = BonfireState.initial;
@@ -50,7 +52,6 @@ class BonfireController extends ChangeNotifier {
 
   // Datos de la sesión actual (recibidos desde DaySessionController)
   String? _sessionId;
-  List<String>? _completedMissionIds;
 
   // Datos del formulario de feedback
   DifficultyLevel _selectedDifficulty = DifficultyLevel.justRight;
@@ -68,6 +69,7 @@ class BonfireController extends ChangeNotifier {
     required this.getFeedbackHistoryUseCase,
     required this.analyzeFeedbackTrendsUseCase,
     required this.generateAIPromptUseCase,
+    required this.timeProvider,
   });
 
   // ========== Getters ==========
@@ -120,7 +122,6 @@ class BonfireController extends ChangeNotifier {
     print('  - Misiones completadas: ${completedMissionIds.length}');
 
     _sessionId = sessionId;
-    _completedMissionIds = completedMissionIds;
 
     // Resetear datos del formulario
     _resetForm();
@@ -234,10 +235,10 @@ class BonfireController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Crear entidad de feedback
+      // Crear entidad de feedback (usando tiempo virtual)
       final feedback = DayFeedback(
         sessionId: _sessionId!,
-        date: DateTime.now().stripped,
+        date: timeProvider.now.stripped,
         difficulty: _selectedDifficulty,
         energyLevel: _selectedEnergy,
         struggledMissions: _struggledMissions.toList(),
@@ -245,6 +246,8 @@ class BonfireController extends ChangeNotifier {
         notes: _notes,
       );
 
+      print('[BonfireController] 📅 Feedback fechado: ${feedback.date}');
+      
       // Guardar usando el use case
       await saveFeedbackUseCase(feedback);
 
@@ -320,7 +323,6 @@ class BonfireController extends ChangeNotifier {
   void reset() {
     print('[BonfireController] 🔄 Reseteando Bonfire Controller');
     _sessionId = null;
-    _completedMissionIds = null;
     _resetForm();
     _analysis = null;
     _state = BonfireState.initial;

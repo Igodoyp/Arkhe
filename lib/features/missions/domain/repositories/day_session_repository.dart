@@ -9,4 +9,8 @@ abstract class DaySessionRepository {
   Future<void> removeCompletedMission(String missionId);
   Future<void> finalizeDaySession();
   Future<void> clearCurrentSession();
+  
+  /// Obtiene sesión de una fecha específica (o null si no existe)
+  /// La fecha debe estar stripped a medianoche
+  Future<DaySession?> getSessionByDate(DateTime dateStripped);
 }

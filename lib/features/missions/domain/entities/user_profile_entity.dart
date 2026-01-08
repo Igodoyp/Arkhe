@@ -62,7 +62,7 @@ class UserProfile {
   /// Indica si el usuario ha completado el onboarding
   final bool hasCompletedOnboarding;
   
-  /// Timestamp de última actualización del perfil
+  /// Timestamp de última actualización del perfil (DEBE ser inyectado)
   final DateTime lastUpdated;
 
   UserProfile({
@@ -74,9 +74,8 @@ class UserProfile {
     this.additionalContext,
     this.challengePreferences = const {},
     this.hasCompletedOnboarding = false,
-    DateTime? lastUpdated,
-  }) : lastUpdated = lastUpdated ?? DateTime.now(),
-       assert(focusAreas.isNotEmpty, 'Debe haber al menos un área de enfoque');
+    required this.lastUpdated,
+  }) : assert(focusAreas.isNotEmpty, 'Debe haber al menos un área de enfoque');
 
   // ========== Método copyWith (Inmutabilidad) ==========
   

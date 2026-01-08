@@ -77,8 +77,8 @@ class GenerateDailyMissionsUseCase {
     
     print('[GenerateDailyMissions] 🔍 Buscando DaySession cerrada para: $yesterdayStripped');
     
-    // Buscar sesión de ayer
-    final yesterdaySession = await _findSessionByDate(yesterdayStripped);
+    // Buscar sesión de ayer usando el repositorio
+    final yesterdaySession = await daySessionRepository.getSessionByDate(yesterdayStripped);
     
     // Evaluar condición binaria: ¿Existe sesión cerrada de ayer?
     final hasFeedbackContext = yesterdaySession != null && yesterdaySession.isClosed;
@@ -305,24 +305,6 @@ class GenerateDailyMissionsUseCase {
   // ==========================================================================
   // HELPERS
   // ==========================================================================
-  
-  /// Busca una sesión por fecha específica
-  /// 
-  /// NOTA: Esto es un placeholder. En la implementación real con Drift,
-  /// tendrás un método `getSessionByDate(DateTime date)` en el repository.
-  Future<DaySession?> _findSessionByDate(DateTime dateStripped) async {
-    // TODO: Implementar búsqueda real en Drift
-    // return await daySessionRepository.getSessionByDate(dateStripped);
-    
-    // Por ahora, solo chequeamos la sesión actual
-    final currentSession = await daySessionRepository.getCurrentDaySession();
-    
-    if (currentSession.date == dateStripped) {
-      return currentSession;
-    }
-    
-    return null; // No encontrada
-  }
 
   /// Genera misiones dummy para testing (placeholder para Gemini)
   List<Mission> _getDummyMissions(DateTime targetDate, String context) {

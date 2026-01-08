@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'ransom_note_text.dart';
 import '../../domain/entities/mission_entity.dart';
 import '../../domain/entities/stat_type.dart';
 
@@ -17,6 +18,8 @@ class MissionCard extends StatelessWidget {
       case StatType.vitality: return Colors.green;
       case StatType.dexterity: return Colors.orange;
       case StatType.wisdom: return Colors.purpleAccent;
+      case StatType.discipline: return Colors.teal;
+      case StatType.creativity: return Colors.pink;
     }
   }
 
@@ -35,12 +38,15 @@ class MissionCard extends StatelessWidget {
         ),
         
         // TÍTULO Y DESCRIPCIÓN
-        title: Text(
-          mission.title,
-          style: TextStyle(
-            decoration: mission.isCompleted ? TextDecoration.lineThrough : null,
-            fontWeight: FontWeight.bold,
-          ),
+        title: RansomNoteText(
+          text: mission.title,
+          palette: [
+            color,
+            Colors.black,
+            Colors.white,
+          ],
+          minFontSize: 20,
+          maxFontSize: 32,
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

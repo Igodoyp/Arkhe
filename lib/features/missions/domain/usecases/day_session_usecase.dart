@@ -61,16 +61,9 @@ class EndDayUseCase {
     final completedMissions = dailyMissions.where((m) => m.isCompleted).toList();
     print('[EndDayUseCase] ✅ Misiones completadas: ${completedMissions.length}');
 
-    // 3. Verificar que haya misiones completadas
-    if (completedMissions.isEmpty) {
-      print('[EndDayUseCase] ⚠️ No hay misiones completadas, retornando resultado vacío');
-      return EndDayResult(
-        statsGained: {},
-        totalXpGained: 0,
-        missionsCompleted: 0,
-      );
-    }
-
+    // 3. Calcular stats ganadas por tipo (solo si hay misiones completadas)
+    // IMPORTANTE: Aún sin misiones, debemos finalizar la sesión para permitir feedback-based
+    
     // 4. Calcular stats ganadas por tipo
     final statsGained = <StatType, double>{};
     int totalXp = 0;
@@ -100,13 +93,16 @@ class EndDayUseCase {
     updatedStats = updatedStats.incrementXp(totalXp);
     print('[EndDayUseCase] 📈 XP total después de incremento: ${updatedStats.totalXp}');
 
-    // 8. Guardar las stats actualizadas (incluyendo totalXp)
-    await userStatsRepository.updateUserStats(updatedStats);
+    // 8. Guardar las stats actualizadas solo si hay misiones completadas
+    if (completedMissions.isNotEmpty) {
+      await userStatsRepository.updateUserStats(updatedStats);
+    }
 
-    // 9. Finalizar la sesión del día
+    // 9. SIEMPRE finalizar la sesión (incluso sin misiones) para permitir feedback-based
     await daySessionRepository.finalizeDaySession();
+    print('[EndDayUseCase] 🔒 Sesión del día finalizada (isClosed=true)');
 
-    // 9. Retornar el resultado
+    // 10. Retornar el resultado
     return EndDayResult(
       statsGained: statsGained,
       totalXpGained: totalXp,

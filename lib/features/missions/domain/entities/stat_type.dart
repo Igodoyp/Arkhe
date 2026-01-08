@@ -8,7 +8,9 @@ enum StatType {
   charisma,     // Carisma (Ej: Socializar, networking)
   vitality,     // Vitalidad (Ej: Dormir bien, alimentación)
   dexterity,    // Destreza (Ej: Practicar habilidades, coordinación)
-  wisdom        // Sabiduría (Ej: Meditar, reflexionar)
+  wisdom,       // Sabiduría (Ej: Meditar, reflexionar)
+  discipline,   // Disciplina (Ej: Hábitos, rutinas, consistencia)
+  creativity    // Creatividad (Ej: Arte, escritura, innovación)
 }
 
 // Un pequeño helper para que se vea bonito en la UI luego
@@ -21,6 +23,8 @@ extension StatTypeExtension on StatType {
       case StatType.vitality: return 'Vitalidad';
       case StatType.dexterity: return 'Destreza';
       case StatType.wisdom: return 'Sabiduría';
+      case StatType.discipline: return 'Disciplina';
+      case StatType.creativity: return 'Creatividad';
     }
   }
   
@@ -33,6 +37,8 @@ extension StatTypeExtension on StatType {
       case StatType.vitality: return Icons.favorite;
       case StatType.dexterity: return Icons.sports_esports;
       case StatType.wisdom: return Icons.psychology;
+      case StatType.discipline: return Icons.track_changes;
+      case StatType.creativity: return Icons.palette;
     }
   }
   
@@ -45,6 +51,8 @@ extension StatTypeExtension on StatType {
       case StatType.vitality: return const Color(0xFF43A047); // Verde
       case StatType.dexterity: return const Color(0xFFFF6F00); // Naranja
       case StatType.wisdom: return const Color(0xFF8E24AA); // Púrpura
+      case StatType.discipline: return const Color(0xFF6D4C41); // Marrón
+      case StatType.creativity: return const Color(0xFFEC407A); // Rosa
     }
   }
 }

@@ -56,8 +56,8 @@ class MissionRepositoryImpl implements MissionRepository {
   @override
   Future<void> updateMission(Mission mission) async {
     try {
-      // Actualizamos el estado de completion
-      await localDataSource.setCompleted(mission.id, mission.isCompleted);
+      // Actualizamos el estado de completion con timestamp desde TimeProvider
+      await localDataSource.setCompleted(mission.id, mission.isCompleted, timeProvider.now);
     } catch (e) {
       throw Exception('Error al actualizar misión: $e');
     }

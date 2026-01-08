@@ -14,19 +14,24 @@ import 'features/missions/data/datasources/local/drift/mission_local_datasource_
 import 'features/missions/domain/usecases/get_missions_usecase.dart';
 import 'features/missions/domain/usecases/toggle_mission_usecase.dart';
 
-// 3. Time Provider
+// 2.1. Time Provider
 import 'core/time/time_provider.dart';
-import 'core/time/real_time_provider.dart';
+import 'core/time/virtual_time_provider.dart';
 
-// 4. Presentación (Providers)
+// 2.2. Audio Service
+import 'core/audio/audio_service.dart';
 
 // 3. Capa de Presentación (Provider y UI)
 import 'features/missions/presentation/providers/mission_provider.dart';
 import 'features/missions/presentation/pages/splash_page.dart';
+import 'features/missions/presentation/pages/mission_page.dart';
 
 void main() async {
   // Asegura que el motor de Flutter esté listo antes de cualquier lógica
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Inicializar sistema de audio (precarga ui_tap.wav, ui_success.wav)
+  await AudioService.instance.init();
   
   // Cargar variables de entorno
   try {
@@ -43,7 +48,7 @@ void main() async {
   // A. Nivel Bajo: Creamos la base de datos y datasources
   final database = AppDatabase();
   final missionLocalDataSource = MissionLocalDataSourceDrift(database: database);
-  final timeProvider = RealTimeProvider();
+  final timeProvider = VirtualTimeProvider();
   
   // B. Creamos el Repositorio (El almacén de datos)
   final missionRepository = MissionRepositoryImpl(
@@ -63,6 +68,16 @@ void main() async {
     // MultiProvider permite tener varios "departamentos" (Providers) activos.
     MultiProvider(
       providers: [
+        // TIEMPO GLOBAL: Un único reloj virtual mutable para desarrollo
+        Provider<TimeProvider>(
+          create: (_) => timeProvider,
+          dispose: (_, __) {},
+        ),
+        // AUDIO GLOBAL: Servicio de efectos de UI (playTap, playSuccess)
+        Provider<AudioService>(
+          create: (_) => AudioService.instance,
+          dispose: (_, __) {},
+        ),
         // D. Nivel Alto: Creamos el Provider (La sala de control)
         // Le inyectamos los UseCases.
         ChangeNotifierProvider(
@@ -100,6 +115,11 @@ class RPGApp extends StatelessWidget {
           secondary: Colors.amberAccent, // Color de acento para botones/toggles
         ),
       ),
+      
+      // RUTAS NOMBRADAS
+      routes: {
+        '/home': (context) => const MissionsPage(),
+      },
       
       // PUNTO DE ENTRADA VISUAL
       // Comienza con SplashPage que verifica onboarding

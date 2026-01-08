@@ -44,6 +44,9 @@ dependencies:
   path: ^1.9.1
   shared_preferences: ^2.3.3
   flutter_dotenv: ^5.2.1
+  flutter_soloud: ^2.0.0 # Verifica la última versión
+  logging: ^1.2.0 # Útil para ver si SoLoud cargó bien
+  google_fonts: ^6.2.1
 
 dev_dependencies:
   flutter_test:
@@ -59,6 +62,8 @@ dev_dependencies:
   build_runner: ^2.10.4
   mocktail: ^1.0.0
 
+  flutter_launcher_icons: ^0.13.1
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
@@ -72,7 +77,19 @@ flutter:
 
   assets:
     - .env
+    - assets/icon/icon_foreground.jpeg
+    - assets/icon/icon_background.png
+    - assets/audio/
 
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/icon_foreground.jpeg"
+  # Configuración para Android (Icono Adaptativo)
+  adaptive_icon_background: "assets/icon/icon_background.png"
+  adaptive_icon_foreground: "assets/icon/icon_foreground.jpeg"
+  # Configuración para iOS (Icono plano, ya que iOS no usa capas igual)
+  image_path_ios: "assets/icon/icon_foreground.jpeg"
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

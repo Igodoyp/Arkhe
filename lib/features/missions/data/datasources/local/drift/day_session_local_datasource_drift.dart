@@ -130,14 +130,14 @@ class DaySessionLocalDataSourceDrift {
   /// Este flag es definitivo para el branching binario.
   /// 
   /// @param sessionId: ID de la sesión a cerrar
-  Future<void> closeSession(String sessionId) async {
-    final now = DateTime.now();
+  /// @param finalizedAt: Timestamp de cierre (inyectado desde repo)
+  Future<void> closeSession(String sessionId, DateTime finalizedAt) async {
     
     final rowsAffected = await (database.update(database.daySessions)
       ..where((tbl) => tbl.id.equals(sessionId))).write(
       DaySessionsCompanion(
         isClosed: const Value(true),
-        finalizedAt: Value(now),
+        finalizedAt: Value(finalizedAt),
       ),
     );
 

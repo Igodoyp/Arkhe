@@ -15,6 +15,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../../core/audio/audio_service.dart';
 import '../../domain/entities/day_feedback_entity.dart';
 import '../../domain/entities/mission_entity.dart';
 import '../../domain/entities/stat_type.dart';
@@ -50,7 +51,6 @@ class _BonfirePageState extends State<BonfirePage>
   // Controladores de animación
   late AnimationController _cinematicController;
   late AnimationController _fadeController;
-  late Animation<double> _fadeAnimation;
   late Animation<double> _titleAnimation;
   late Animation<double> _statsAnimation;
 
@@ -77,10 +77,6 @@ class _BonfirePageState extends State<BonfirePage>
     _fadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
-    );
-    _fadeAnimation = CurvedAnimation(
-      parent: _fadeController,
-      curve: Curves.easeInOut,
     );
 
     // Animaciones escalonadas para intro cinemática
@@ -149,7 +145,11 @@ class _BonfirePageState extends State<BonfirePage>
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () {
+                      final audioService = Provider.of<AudioService>(context, listen: false);
+                      audioService.playTap();
+                      Navigator.pop(context);
+                    },
                     child: const Text('Volver'),
                   ),
                 ],
@@ -974,6 +974,9 @@ class _BonfirePageState extends State<BonfirePage>
             onPressed: controller.isSaving
                 ? null
                 : () async {
+                    final audioService = Provider.of<AudioService>(context, listen: false);
+                    audioService.playTap();
+                    
                     await controller.saveFeedback();
                     if (!mounted) return;
 
@@ -1027,6 +1030,9 @@ class _BonfirePageState extends State<BonfirePage>
         // Botón secundario: Saltar (sin guardar)
         TextButton(
           onPressed: () {
+            final audioService = Provider.of<AudioService>(context, listen: false);
+            audioService.playTap();
+            
             showDialog(
               context: context,
               builder: (context) => AlertDialog(
@@ -1041,11 +1047,17 @@ class _BonfirePageState extends State<BonfirePage>
                 ),
                 actions: [
                   TextButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () {
+                      final audioService = Provider.of<AudioService>(context, listen: false);
+                      audioService.playTap();
+                      Navigator.pop(context);
+                    },
                     child: const Text('Cancelar'),
                   ),
                   TextButton(
                     onPressed: () {
+                      final audioService = Provider.of<AudioService>(context, listen: false);
+                      audioService.playTap();
                       Navigator.pop(context); // Cerrar diálogo
                       Navigator.pop(context); // Volver a missions
                     },
@@ -1219,6 +1231,8 @@ class _BonfirePageState extends State<BonfirePage>
                 height: 56,
                 child: ElevatedButton(
                   onPressed: () {
+                    final audioService = Provider.of<AudioService>(context, listen: false);
+                    audioService.playTap();
                     // Volver a la pantalla de misiones
                     Navigator.pop(context);
                   },

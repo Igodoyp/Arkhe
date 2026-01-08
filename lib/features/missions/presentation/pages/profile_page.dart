@@ -1,6 +1,8 @@
 // presentation/pages/profile_page.dart
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../../core/audio/audio_service.dart';
 import '../../domain/entities/stat_type.dart';
 import '../../domain/entities/user_profile_entity.dart';
 import '../../domain/entities/user_stats_entity.dart';
@@ -80,7 +82,11 @@ class _ProfilePageState extends State<ProfilePage> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            final audioService = Provider.of<AudioService>(context, listen: false);
+            audioService.playTap();
+            Navigator.pop(context);
+          },
         ),
         title: const Text(
           'PERFIL',

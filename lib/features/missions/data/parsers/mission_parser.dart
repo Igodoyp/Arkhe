@@ -144,6 +144,12 @@ class MissionParser {
       case 'sabiduria':
       case 'sabiduría':
         return StatType.wisdom;
+      case 'discipline':
+      case 'disciplina':
+        return StatType.discipline;
+      case 'creativity':
+      case 'creatividad':
+        return StatType.creativity;
       default:
         print('[MissionParser] ⚠️ Tipo desconocido "$typeString", usando strength por defecto');
         return StatType.strength;

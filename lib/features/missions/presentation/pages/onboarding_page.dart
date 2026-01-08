@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../../core/time/time_provider.dart';
+import '../../../../core/audio/audio_service.dart';
 import '../../domain/entities/user_profile_entity.dart';
 import '../../data/datasources/user_profile_datasource.dart';
 import '../../data/repositories/user_profile_repository_impl.dart';
@@ -65,7 +68,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
   }
 
   void _nextPage() {
-    if (_currentPage < 3) {
+    if (_currentPage < 2) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 600),
         curve: Curves.easeInOutCubic,
@@ -99,6 +102,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
       return;
     }
 
+    // Obtener TimeProvider global para timestamp
+    final timeProvider = Provider.of<TimeProvider>(context, listen: false);
+
     // Crear perfil
     final profile = UserProfile(
       id: 'default',
@@ -108,6 +114,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
       currentGoals: [], // Se pueden agregar más adelante
       challengePreferences: {}, // Valores por defecto
       hasCompletedOnboarding: true,
+      lastUpdated: timeProvider.now,
     );
 
     // Guardar perfil con persistencia real
@@ -150,7 +157,6 @@ class _OnboardingPageState extends State<OnboardingPage> {
           });
         },
         children: [
-          _buildIntroPage(),
           _buildNamePage(),
           _buildMotivationPage(),
           _buildFocusAreasPage(),
@@ -225,7 +231,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
               
               // Botón "Comenzar"
               ElevatedButton(
-                onPressed: _nextPage,
+                onPressed: () {
+                  final audioService = Provider.of<AudioService>(context, listen: false);
+                  audioService.playTap();
+                  _nextPage();
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.redAccent,
                   foregroundColor: Colors.white,
@@ -333,7 +343,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   OutlinedButton(
-                    onPressed: _previousPage,
+                    onPressed: () {
+                      final audioService = Provider.of<AudioService>(context, listen: false);
+                      audioService.playTap();
+                      _previousPage();
+                    },
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.white,
                       side: const BorderSide(color: Colors.white54, width: 2),
@@ -354,7 +368,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
                   ElevatedButton(
                     onPressed: _nameController.text.trim().isEmpty
                         ? null
-                        : _nextPage,
+                        : () {
+                            final audioService = Provider.of<AudioService>(context, listen: false);
+                            audioService.playTap();
+                            _nextPage();
+                          },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.redAccent,
                       foregroundColor: Colors.white,
@@ -460,7 +478,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   OutlinedButton(
-                    onPressed: _previousPage,
+                    onPressed: () {
+                      final audioService = Provider.of<AudioService>(context, listen: false);
+                      audioService.playTap();
+                      _previousPage();
+                    },
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.white,
                       side: const BorderSide(color: Colors.white54, width: 2),
@@ -481,7 +503,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
                   ElevatedButton(
                     onPressed: _motivationController.text.trim().isEmpty
                         ? null
-                        : _nextPage,
+                        : () {
+                            final audioService = Provider.of<AudioService>(context, listen: false);
+                            audioService.playTap();
+                            _nextPage();
+                          },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.redAccent,
                       foregroundColor: Colors.white,
@@ -611,7 +637,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   OutlinedButton(
-                    onPressed: _previousPage,
+                    onPressed: () {
+                      final audioService = Provider.of<AudioService>(context, listen: false);
+                      audioService.playTap();
+                      _previousPage();
+                    },
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.white,
                       side: const BorderSide(color: Colors.white54, width: 2),
@@ -632,7 +662,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
                   ElevatedButton(
                     onPressed: _selectedFocusAreas.isEmpty
                         ? null
-                        : _completeOnboarding,
+                        : () {
+                            final audioService = Provider.of<AudioService>(context, listen: false);
+                            audioService.playTap();
+                            _completeOnboarding();
+                          },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.redAccent,
                       foregroundColor: Colors.white,

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../data/datasources/user_profile_datasource.dart';
 import '../../data/repositories/user_profile_repository_impl.dart';
 import '../../domain/usecases/user_profile_usecase.dart';
-import 'onboarding_page.dart';
+import '../../../../presentation/screens/onboarding_screen.dart';
 import 'mission_page.dart';
 
 /// Splash screen que verifica si el usuario ha completado el onboarding
@@ -11,7 +11,7 @@ import 'mission_page.dart';
 /// 1. Muestra logo/loading
 /// 2. Verifica si existe perfil de usuario
 /// 3. Si existe Y hasCompletedOnboarding == true → MissionsPage
-/// 4. Si NO existe O hasCompletedOnboarding == false → OnboardingPage
+/// 4. Si NO existe O hasCompletedOnboarding == false → OnboardingScreen (MVP)
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
 
@@ -75,7 +75,7 @@ class _SplashPageState extends State<SplashPage>
       } else {
         // Usuario nuevo o no completó onboarding → ir a onboarding
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const OnboardingPage()),
+          MaterialPageRoute(builder: (context) => const OnboardingScreen()),
         );
       }
     } catch (e) {
@@ -84,7 +84,7 @@ class _SplashPageState extends State<SplashPage>
       
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const OnboardingPage()),
+        MaterialPageRoute(builder: (context) => const OnboardingScreen()),
       );
     }
   }

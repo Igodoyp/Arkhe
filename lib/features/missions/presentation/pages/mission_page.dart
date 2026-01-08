@@ -1,3 +1,4 @@
+import '../widgets/ransom_note_text.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../controllers/mission_controller.dart';
@@ -25,14 +26,17 @@ import '../../domain/usecases/ensure_missions_for_date_usecase.dart';
 import '../../domain/usecases/watch_missions_for_date_usecase.dart';
 import '../../domain/services/mission_orchestration_service.dart';
 import '../../data/services/gemini_service.dart';
-import '../../../../core/time/real_time_provider.dart';
+import '../../../../core/time/time_provider.dart';
+import '../../../../core/time/virtual_time_provider.dart';
 import '../../../../core/haptic/haptic_service.dart';
+import '../../../../core/audio/audio_service.dart';
 import '../../domain/entities/stat_type.dart';
 import 'profile_page.dart';
 import 'bonfire_page.dart';
 import '../widgets/bonfire_page_route.dart';
 import '../widgets/celebration_effects.dart';
 import '../widgets/shimmer_loading.dart';
+import '../widgets/arkhe_flame.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class MissionsPage extends StatefulWidget {
@@ -52,6 +56,12 @@ class _MissionsPageState extends State<MissionsPage> {
   late UserProfileRepository _userProfileRepository;
   late UserStatsRepository _userStatsRepository;
   
+  // Tiempo virtual compartido (para testing ciclo diario)
+  late VirtualTimeProvider _timeProvider;
+  
+  // Feedback repository compartido (para que bonfire guarde en el mismo storage)
+  late DayFeedbackRepositoryImpl _dayFeedbackRepository;
+  
   // Estado de inicialización
   bool _isInitialized = false;
 
@@ -70,8 +80,9 @@ class _MissionsPageState extends State<MissionsPage> {
     // 1. Database (Drift)
     final database = AppDatabase();
     
-    // 1.1. Time Provider (para inyección de tiempo)
-    final timeProvider = RealTimeProvider();
+    // 1.1. Time Provider (COMPARTIDO desde Provider global)
+    _timeProvider = Provider.of<TimeProvider>(context, listen: false) as VirtualTimeProvider;
+    print('[MissionsPage] 🕐 Tiempo compartido iniciado: ${_timeProvider.todayStripped}');
     
     // 2. Local DataSources (Drift)
     final missionLocalDataSource = MissionLocalDataSourceDrift(database: database);
@@ -85,14 +96,17 @@ class _MissionsPageState extends State<MissionsPage> {
     // 3. Repositories
     final missionRepository = MissionRepositoryImpl(
       localDataSource: missionLocalDataSource,
-      timeProvider: timeProvider,
+      timeProvider: _timeProvider,
     );
     final daySessionRepository = DaySessionRepositoryImpl(
       localDataSource: daySessionLocalDataSource,
-      timeProvider: timeProvider,
+      timeProvider: _timeProvider,
     );
-    final userStatsRepository = UserStatsRepositoryDriftImpl(localDataSource: userStatsLocalDataSource);
-    final dayFeedbackRepository = DayFeedbackRepositoryImpl(dataSource: dayFeedbackDataSource);
+    final userStatsRepository = UserStatsRepositoryDriftImpl(
+      localDataSource: userStatsLocalDataSource,
+      timeProvider: _timeProvider,
+    );
+    _dayFeedbackRepository = DayFeedbackRepositoryImpl(dataSource: dayFeedbackDataSource);
     final userProfileRepository = UserProfileRepositoryImpl(dataSource: userProfileDataSource);
     
     // Guardar referencias para otras páginas
@@ -121,7 +135,7 @@ class _MissionsPageState extends State<MissionsPage> {
     final generateDailyMissionsUseCase = GenerateDailyMissionsUseCase(
       userProfileRepository: userProfileRepository,
       daySessionRepository: daySessionRepository,
-      dayFeedbackRepository: dayFeedbackRepository,
+      dayFeedbackRepository: _dayFeedbackRepository,
       userStatsRepository: userStatsRepository,
       geminiService: geminiService,
       missionRepository: missionRepository,
@@ -132,7 +146,7 @@ class _MissionsPageState extends State<MissionsPage> {
       getDailyMissionsUseCase: GetDailyMissionsUseCase(missionRepository: missionRepository),
       generateDailyMissionsUseCase: generateDailyMissionsUseCase,
       missionRepository: missionRepository,
-      timeProvider: timeProvider,
+      timeProvider: _timeProvider,
     );
     
     // 4.4. Mission UseCases (Formales para Controller)
@@ -155,7 +169,7 @@ class _MissionsPageState extends State<MissionsPage> {
       ensureMissionsUseCase: ensureMissionsUseCase,
       watchMissionsUseCase: watchMissionsUseCase,
       missionRepository: missionRepository,
-      timeProvider: timeProvider,
+      timeProvider: _timeProvider,
       daySessionController: _daySessionController,
     );
     
@@ -211,21 +225,18 @@ class _MissionsPageState extends State<MissionsPage> {
       return;
     }
 
-    // Crear controller de Bonfire (con todas las dependencias)
-    final feedbackDataSource = DayFeedbackDataSourceDummy();
-    final feedbackRepository = DayFeedbackRepositoryImpl(
-      dataSource: feedbackDataSource,
-    );
+    // Crear controller de Bonfire (COMPARTIR repositorio y timeProvider)
     final bonfireController = BonfireController(
-      saveFeedbackUseCase: SaveFeedbackUseCase(feedbackRepository),
-      getFeedbackHistoryUseCase: GetFeedbackHistoryUseCase(feedbackRepository),
-      analyzeFeedbackTrendsUseCase: AnalyzeFeedbackTrendsUseCase(feedbackRepository),
-      generateAIPromptUseCase: GenerateAIPromptUseCase(feedbackRepository),
+      saveFeedbackUseCase: SaveFeedbackUseCase(_dayFeedbackRepository),
+      getFeedbackHistoryUseCase: GetFeedbackHistoryUseCase(_dayFeedbackRepository),
+      analyzeFeedbackTrendsUseCase: AnalyzeFeedbackTrendsUseCase(_dayFeedbackRepository),
+      generateAIPromptUseCase: GenerateAIPromptUseCase(_dayFeedbackRepository),
+      timeProvider: _timeProvider,
     );
 
     // Navegar a la pantalla de Bonfire con transición épica
     if (!mounted) return;
-    Navigator.of(context).push(
+    await Navigator.of(context).push(
       BonfirePageRoute(
         builder: (context) => ChangeNotifierProvider.value(
           value: bonfireController,
@@ -239,6 +250,17 @@ class _MissionsPageState extends State<MissionsPage> {
         ),
       ),
     );
+    
+    // Al volver de bonfire: avanzar día virtual y recargar misiones + sesión
+    if (!mounted) return;
+    print('[MissionsPage] 🔄 Volviendo de Bonfire, avanzando tiempo virtual...');
+    _timeProvider.advanceDays(1);
+    
+    // CRÍTICO: Recargar tanto misiones como sesión del nuevo día
+    await _missionController.loadMissions();
+    await _daySessionController.loadCurrentSession();
+    
+    print('[MissionsPage] ✅ Día avanzado → ${_timeProvider.todayStripped}');
   }
 
 //TODO: meter cosas dopaminicas al completar misiones
@@ -260,14 +282,15 @@ class _MissionsPageState extends State<MissionsPage> {
     return Scaffold(
       backgroundColor: const Color(0xFF232323),
       appBar: AppBar(
-        title: const Text(
-          'MISIONES DIARIAS',
-          style: TextStyle(
-            fontWeight: FontWeight.w900,
-            fontSize: 22,
-            letterSpacing: 1.5,
-            shadows: [Shadow(color: Colors.red, blurRadius: 4, offset: Offset(1, 2))],
-          ),
+        title: RansomNoteText(
+          text: 'MISIONES DIARIAS',
+          palette: [
+            Colors.redAccent,
+            Colors.black,
+            Colors.white,
+          ],
+          minFontSize: 20,
+          maxFontSize: 28,
         ),
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
@@ -279,6 +302,9 @@ class _MissionsPageState extends State<MissionsPage> {
             icon: const Icon(Icons.person, color: Colors.white),
             tooltip: 'Perfil',
             onPressed: () {
+              final audioService = Provider.of<AudioService>(context, listen: false);
+              audioService.playTap();
+              
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -296,6 +322,8 @@ class _MissionsPageState extends State<MissionsPage> {
       body: _buildBody(),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
+          final audioService = Provider.of<AudioService>(context, listen: false);
+          audioService.playTap();
           _missionController.refreshMissions();
         },
         backgroundColor: Colors.red.shade700,
@@ -362,6 +390,8 @@ class _MissionsPageState extends State<MissionsPage> {
             const SizedBox(height: 24),
             ElevatedButton.icon(
               onPressed: () {
+                final audioService = Provider.of<AudioService>(context, listen: false);
+                audioService.playTap();
                 _missionController.loadMissions();
               },
               icon: const Icon(Icons.refresh),
@@ -381,16 +411,15 @@ class _MissionsPageState extends State<MissionsPage> {
           ],
         ),
       );
+
     }
-    
-    // ESTADO 3: Generando misiones (lista vacía)
+
+    // ESTADO 3: Generando misiones (cuando la lista aún está vacía)
     if (_missionController.missions.isEmpty && _missionController.isGenerating) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(color: Colors.redAccent),
-            SizedBox(height: 16),
+          children: const [
             Text(
               'GENERANDO MISIONES...',
               style: TextStyle(
@@ -454,7 +483,11 @@ class _MissionsPageState extends State<MissionsPage> {
                 ),
                 ElevatedButton.icon(
                   onPressed: !(_daySessionController.currentSession?.isClosed ?? true)
-                      ? () => _showEndDaySummary(context)
+                      ? () {
+                          final audioService = Provider.of<AudioService>(context, listen: false);
+                          audioService.playTap();
+                          _showEndDaySummary(context);
+                        }
                       : null,
                   icon: const Icon(Icons.check_circle_outline, size: 20),
                   label: const Text(
@@ -522,19 +555,43 @@ class _MissionsPageState extends State<MissionsPage> {
                             child: ListTile(
                               contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                               onTap: () async {
-                                // Haptic feedback ANTES de cambiar estado
+                                // Audio + Haptic feedback ANTES de cambiar estado
+                                final audioService = Provider.of<AudioService>(context, listen: false);
+                                
+                                // Reproducir sonido según acción (completar vs desmarcar)
+                                if (!mission.isCompleted) {
+                                  // Al COMPLETAR → ui_success.wav
+                                  audioService.playSuccess();
+                                } else {
+                                  // Al DESMARCAR → ui_tap.wav (más sutil)
+                                  audioService.playTap();
+                                }
+                                
                                 await HapticService.celebration();
                                 _missionController.toggleMission(index);
                               },
-                              leading: CircleAvatar(
-                                backgroundColor: mission.isCompleted ? Colors.redAccent : Colors.black,
-                                radius: 26,
-                                child: Icon(
-                                  mission.isCompleted ? Icons.check : Icons.flash_on,
-                                  color: Colors.white,
-                                  size: 28,
-                                  shadows: const [Shadow(color: Colors.red, blurRadius: 6)],
-                                ),
+                              leading: SizedBox(
+                                width: 52,
+                                height: 52,
+                                child: mission.isCompleted
+                                    ? GeoFlame(
+                                        width: 52,
+                                        height: 52,
+                                        intensity: 0.8,
+                                        // Colores vivos cuando está completada
+                                        colorOutline: const Color(0xFF1A0515), // Negro/Violeta oscuro
+                                        colorBody: const Color(0xFFD72638),    // Rojo Intenso
+                                        colorCore: const Color(0xFF4AF2F5),    // Cian Neón
+                                      )
+                                    : GeoFlame(
+                                        width: 52,
+                                        height: 52,
+                                        intensity: 0.3,
+                                        // Colores grises cuando no está completada
+                                        colorOutline: const Color(0xFF2A2A2A), // Gris oscuro
+                                        colorBody: const Color(0xFF5A5A5A),    // Gris medio
+                                        colorCore: const Color(0xFF808080),    // Gris claro
+                                      ),
                               ),
                               title: Text(
                                 mission.title.toUpperCase(),
@@ -618,240 +675,5 @@ class _MissionsPageState extends State<MissionsPage> {
                 ),
               ],
             );
-  }
-}
-
-// Widget de diálogo para mostrar el resumen del día
-class _EndDaySummaryDialog extends StatelessWidget {
-  final EndDayResult result;
-
-  const _EndDaySummaryDialog({required this.result});
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 400),
-        decoration: BoxDecoration(
-          color: const Color(0xFF232323),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.redAccent, width: 3),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.redAccent.withOpacity(0.5),
-              blurRadius: 20,
-              spreadRadius: 5,
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Encabezado
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: const BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(13),
-                  topRight: Radius.circular(13),
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.star,
-                    color: Colors.yellow.shade700,
-                    size: 32,
-                    shadows: const [Shadow(color: Colors.yellow, blurRadius: 10)],
-                  ),
-                  const SizedBox(width: 12),
-                  const Text(
-                    '¡DÍA COMPLETADO!',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.5,
-                      shadows: [
-                        Shadow(color: Colors.redAccent, blurRadius: 8),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Icon(
-                    Icons.star,
-                    color: Colors.yellow.shade700,
-                    size: 32,
-                    shadows: const [Shadow(color: Colors.yellow, blurRadius: 10)],
-                  ),
-                ],
-              ),
-            ),
-            // Contenido
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  // XP Total
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.black,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.yellow.shade700, width: 2),
-                    ),
-                    child: Column(
-                      children: [
-                        const Text(
-                          'XP TOTAL GANADO',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '+${result.totalXpGained} XP',
-                          style: TextStyle(
-                            color: Colors.yellow.shade700,
-                            fontSize: 36,
-                            fontWeight: FontWeight.w900,
-                            shadows: const [
-                              Shadow(color: Colors.yellow, blurRadius: 8),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${result.missionsCompleted} misiones completadas',
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  // Stats incrementadas
-                  if (result.statsGained.isNotEmpty) ...[
-                    const Text(
-                      'STATS INCREMENTADAS',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    ...result.statsGained.entries.map((entry) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: _getStatColor(entry.key),
-                              width: 2,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                entry.key.name.toUpperCase(),
-                                style: TextStyle(
-                                  color: _getStatColor(entry.key),
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.1,
-                                ),
-                              ),
-                              Text(
-                                '+${entry.value.toStringAsFixed(1)}',
-                                style: TextStyle(
-                                  color: _getStatColor(entry.key),
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w900,
-                                  shadows: [
-                                    Shadow(
-                                      color: _getStatColor(entry.key),
-                                      blurRadius: 4,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }),
-                  ],
-                ],
-              ),
-            ),
-            // Botón de cerrar
-            Padding(
-              padding: const EdgeInsets.only(bottom: 24, left: 24, right: 24),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.redAccent,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      side: const BorderSide(color: Colors.black, width: 3),
-                    ),
-                  ),
-                  child: const Text(
-                    'CONTINUAR',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Colores para cada tipo de stat
-  Color _getStatColor(StatType type) {
-    switch (type) {
-      case StatType.strength:
-        return Colors.red.shade400;
-      case StatType.intelligence:
-        return Colors.blue.shade400;
-      case StatType.charisma:
-        return Colors.yellow.shade600;
-      case StatType.vitality:
-        return Colors.green.shade400;
-      case StatType.dexterity:
-        return Colors.orange.shade400;
-      case StatType.wisdom:
-        return Colors.purple.shade300;
-    }
   }
 }
